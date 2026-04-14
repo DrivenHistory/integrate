@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<VBox xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.districthub.ui.ConnectionsController"
+      styleClass="main-content">
+
+    <HBox styleClass="content-header" alignment="CENTER_LEFT" spacing="12">
+        <Label text="Platform Connections" styleClass="content-title"/>
+        <Region HBox.hgrow="ALWAYS"/>
+        <HBox fx:id="summaryPill" styleClass="sync-status-pill" spacing="6" alignment="CENTER">
+            <Label fx:id="summaryDot" text="●" styleClass="status-dot-connected"/>
+            <Label fx:id="summaryLabel" text="Loading..." styleClass="sync-status-text"/>
+        </HBox>
+    </HBox>
+
+    <ScrollPane VBox.vgrow="ALWAYS" fitToWidth="true" styleClass="cards-scroll">
+        <VBox fx:id="cardsContainer" spacing="12" styleClass="cards-container"/>
+    </ScrollPane>
+</VBox>

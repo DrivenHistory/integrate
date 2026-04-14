@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<VBox xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.districthub.ui.ScoresController"
+      styleClass="main-content">
+
+    <HBox styleClass="content-header" alignment="CENTER_LEFT" spacing="12">
+        <VBox spacing="2">
+            <Label text="Scores" styleClass="content-title"/>
+            <Label text="Results from completed games" styleClass="content-subtitle"/>
+        </VBox>
+        <Region HBox.hgrow="ALWAYS"/>
+    </HBox>
+
+    <HBox styleClass="filter-bar" spacing="12" alignment="CENTER_LEFT">
+        <Label text="Filter:" styleClass="filter-label"/>
+        <ComboBox fx:id="sportFilter" promptText="All Sports" styleClass="filter-combo"/>
+        <ComboBox fx:id="levelFilter" promptText="All Levels" styleClass="filter-combo"/>
+        <ComboBox fx:id="platformFilter" promptText="All Platforms" styleClass="filter-combo"/>
+        <Label text="From:" styleClass="filter-label"/>
+        <DatePicker fx:id="dateFrom" styleClass="filter-combo"/>
+        <Label text="To:" styleClass="filter-label"/>
+        <DatePicker fx:id="dateTo" styleClass="filter-combo"/>
+        <Region HBox.hgrow="ALWAYS"/>
+        <Button text="+ Add Game" styleClass="btn-primary" onAction="#onAddGame"/>
+        <Button text="Export CSV" styleClass="btn-secondary" onAction="#onExportCSV"/>
+    </HBox>
+
+    <TableView fx:id="scoresTable" VBox.vgrow="ALWAYS" styleClass="data-table">
+        <columns>
+            <TableColumn fx:id="colScoreDate" text="DATE" prefWidth="110"/>
+            <TableColumn fx:id="colScoreHome" text="HOME TEAM" prefWidth="220"/>
+            <TableColumn fx:id="colScoreAway" text="AWAY TEAM" prefWidth="220"/>
+            <TableColumn fx:id="colScore" text="SCORE" prefWidth="100"/>
+            <TableColumn fx:id="colScoreSport" text="SPORT" prefWidth="120"/>
+            <TableColumn fx:id="colScoreLevel" text="LEVEL" prefWidth="120"/>
+            <TableColumn fx:id="colScoreSource" text="SOURCE" prefWidth="120"/>
+        </columns>
+    </TableView>
+</VBox>

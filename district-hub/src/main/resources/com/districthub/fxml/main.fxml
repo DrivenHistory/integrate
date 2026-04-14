@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.text.*?>
+<BorderPane xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.districthub.ui.MainController"
+            prefWidth="1440" prefHeight="900"
+            styleClass="root-pane">
+
+    <left>
+        <VBox fx:id="sidebar" styleClass="sidebar" prefWidth="220">
+            <!-- Logo row -->
+            <HBox styleClass="logo-row" alignment="CENTER_LEFT" spacing="10">
+                <Label text="🏟" styleClass="logo-icon"/>
+                <VBox spacing="1">
+                    <Label text="GamesHub" styleClass="logo-title"/>
+                    <Label text="Athletic Sync" styleClass="logo-subtitle"/>
+                </VBox>
+            </HBox>
+
+            <!-- Nav section -->
+            <VBox styleClass="nav-section" spacing="2" VBox.vgrow="ALWAYS">
+                <Label text="NAVIGATION" styleClass="nav-section-label"/>
+<HBox fx:id="navSchedule" styleClass="nav-item nav-item-active" onMouseClicked="#onScheduleClick" spacing="10" alignment="CENTER_LEFT">
+                    <Label text="📅" styleClass="nav-icon"/>
+                    <Label text="Schedule" styleClass="nav-label"/>
+                </HBox>
+                <HBox fx:id="navScores" styleClass="nav-item" onMouseClicked="#onScoresClick" spacing="10" alignment="CENTER_LEFT">
+                    <Label text="🏆" styleClass="nav-icon"/>
+                    <Label text="Scores" styleClass="nav-label"/>
+                </HBox>
+                <HBox fx:id="navConnections" styleClass="nav-item" onMouseClicked="#onConnectionsClick" spacing="10" alignment="CENTER_LEFT">
+                    <Label text="🔌" styleClass="nav-icon"/>
+                    <Label text="Connections" styleClass="nav-label"/>
+                </HBox>
+                <HBox fx:id="navSyncLog" styleClass="nav-item" onMouseClicked="#onSyncLogClick" spacing="10" alignment="CENTER_LEFT">
+                    <Label text="📋" styleClass="nav-icon"/>
+                    <Label text="Sync Log" styleClass="nav-label"/>
+                </HBox>
+                <HBox fx:id="navSettings" styleClass="nav-item" onMouseClicked="#onSettingsClick" spacing="10" alignment="CENTER_LEFT">
+                    <Label text="⚙" styleClass="nav-icon"/>
+                    <Label text="Settings" styleClass="nav-label"/>
+                </HBox>
+                <HBox fx:id="navAbout" styleClass="nav-item" onMouseClicked="#onAboutClick" spacing="10" alignment="CENTER_LEFT">
+                    <Label text="ℹ" styleClass="nav-icon"/>
+                    <Label text="About" styleClass="nav-label"/>
+                </HBox>
+            </VBox>
+
+            <!-- Platform status section -->
+            <VBox styleClass="platform-status-section" spacing="4">
+                <Label text="PLATFORMS" styleClass="nav-section-label"/>
+                <HBox fx:id="statusArbiter" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
+                    <Label fx:id="dotArbiter" text="●" styleClass="status-dot-unknown"/>
+                    <Label text="Arbiter" styleClass="platform-name"/>
+                </HBox>
+                <HBox fx:id="statusFanX" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
+                    <Label fx:id="dotFanX" text="●" styleClass="status-dot-unknown"/>
+                    <Label text="FanX" styleClass="platform-name"/>
+                </HBox>
+                <HBox fx:id="statusRankOne" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
+                    <Label fx:id="dotRankOne" text="●" styleClass="status-dot-unknown"/>
+                    <Label text="Rank One" styleClass="platform-name"/>
+                </HBox>
+                <HBox fx:id="statusFusion" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
+                    <Label fx:id="dotFusion" text="●" styleClass="status-dot-unknown"/>
+                    <Label text="FusionPoint" styleClass="platform-name"/>
+                </HBox>
+                <HBox fx:id="statusBound" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
+                    <Label fx:id="dotBound" text="●" styleClass="status-dot-unknown"/>
+                    <Label text="Bound" styleClass="platform-name"/>
+                </HBox>
+                <HBox fx:id="statusVantage" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
+                    <Label fx:id="dotVantage" text="●" styleClass="status-dot-unknown"/>
+                    <Label text="Vantage / League Minder" styleClass="platform-name"/>
+                </HBox>
+                <HBox fx:id="statusDragonfly" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
+                    <Label fx:id="dotDragonfly" text="●" styleClass="status-dot-unknown"/>
+                    <Label text="Dragonfly" styleClass="platform-name"/>
+                </HBox>
+                <HBox fx:id="statusHomeCampus" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
+                    <Label fx:id="dotHomeCampus" text="●" styleClass="status-dot-unknown"/>
+                    <Label text="HomeCampus" styleClass="platform-name"/>
+                </HBox>
+                <HBox fx:id="statusMaxPreps" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
+                    <Label fx:id="dotMaxPreps" text="●" styleClass="status-dot-unknown"/>
+                    <Label text="MaxPreps" styleClass="platform-name"/>
+                </HBox>
+            </VBox>
+        </VBox>
+    </left>
+
+    <center>
+        <StackPane fx:id="contentArea"/>
+    </center>
+</BorderPane>

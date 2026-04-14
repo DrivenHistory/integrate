@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<VBox xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.districthub.ui.SettingsController"
+      styleClass="main-content">
+
+    <HBox styleClass="content-header" alignment="CENTER_LEFT">
+        <VBox spacing="2">
+            <Label text="Settings" styleClass="content-title"/>
+            <Label text="Sync behavior and platform access" styleClass="content-subtitle"/>
+        </VBox>
+    </HBox>
+
+    <HBox VBox.vgrow="ALWAYS" spacing="20" styleClass="settings-body">
+        <!-- Left column -->
+        <VBox spacing="20" prefWidth="480">
+            <!-- Sync Schedule -->
+            <VBox styleClass="card" spacing="14">
+                <Label text="Sync Schedule" styleClass="card-title"/>
+                <HBox alignment="CENTER_LEFT" spacing="12">
+                    <VBox spacing="3" HBox.hgrow="ALWAYS">
+                        <Label text="Daily Morning Check" styleClass="setting-label"/>
+                        <Label text="Validates sessions and runs a full sync daily" styleClass="setting-desc" wrapText="true"/>
+                    </VBox>
+                    <CheckBox fx:id="dailySyncToggle" selected="true"/>
+                </HBox>
+                <HBox alignment="CENTER_LEFT" spacing="8">
+                    <Label text="Sync time:" styleClass="setting-label"/>
+                    <Spinner fx:id="syncHourSpinner" prefWidth="64"/>
+                    <Label text=":" styleClass="setting-label"/>
+                    <Spinner fx:id="syncMinuteSpinner" prefWidth="64"/>
+                    <ComboBox fx:id="syncAmPm" prefWidth="72" styleClass="filter-combo"/>
+                </HBox>
+                <HBox alignment="CENTER_LEFT" spacing="12">
+                    <VBox spacing="3" HBox.hgrow="ALWAYS">
+                        <Label text="System Tray Notifications" styleClass="setting-label"/>
+                        <Label text="Alert when a platform session expires" styleClass="setting-desc"/>
+                    </VBox>
+                    <CheckBox fx:id="notifToggle" selected="true"/>
+                </HBox>
+            </VBox>
+
+            <!-- How Sync Works -->
+            <VBox styleClass="card" spacing="12">
+                <Label text="How Sync Works" styleClass="card-title"/>
+                <HBox spacing="12" alignment="TOP_LEFT">
+                    <Label text="⬇" style="-fx-text-fill: #4F6BED;"/>
+                    <VBox spacing="2">
+                        <Label text="Pull" styleClass="how-step-title"/>
+                        <Label text="All connected platforms are read into your local database." styleClass="how-step-desc" wrapText="true" maxWidth="360"/>
+                    </VBox>
+                </HBox>
+                <HBox spacing="12" alignment="TOP_LEFT">
+                    <Label text="⧉" style="-fx-text-fill: #4F6BED;"/>
+                    <VBox spacing="2">
+                        <Label text="Unified View" styleClass="how-step-title"/>
+                        <Label text="Teams, schedules and scores from all platforms appear in one place." styleClass="how-step-desc" wrapText="true" maxWidth="360"/>
+                    </VBox>
+                </HBox>
+                <HBox spacing="12" alignment="TOP_LEFT">
+                    <Label text="⬆" style="-fx-text-fill: #A78BFA;"/>
+                    <VBox spacing="2">
+                        <Label text="Push" styleClass="how-step-title"/>
+                        <Label text="Changes are written back only to platforms set to READ / WRITE." styleClass="how-step-desc" wrapText="true" maxWidth="360"/>
+                    </VBox>
+                </HBox>
+                <HBox spacing="12" alignment="TOP_LEFT">
+                    <Label text="⚠" style="-fx-text-fill: #F59E0B;"/>
+                    <VBox spacing="2">
+                        <Label text="Conflicts" styleClass="how-step-title"/>
+                        <Label text="When platforms disagree on the same game, it's flagged in Sync Log." styleClass="how-step-desc" wrapText="true" maxWidth="360"/>
+                    </VBox>
+                </HBox>
+            </VBox>
+        </VBox>
+
+        <!-- Right column -->
+        <VBox spacing="20" HBox.hgrow="ALWAYS">
+            <VBox styleClass="card" VBox.vgrow="ALWAYS" spacing="14">
+                <Label text="Platform Access" styleClass="card-title"/>
+                <Label text="READ pulls data in. READ / WRITE also pushes your changes back to that platform." styleClass="card-desc" wrapText="true"/>
+                <TableView fx:id="platformAccessTable" VBox.vgrow="ALWAYS" styleClass="data-table">
+                    <columns>
+                        <TableColumn fx:id="colPlatName" text="PLATFORM" prefWidth="220"/>
+                        <TableColumn fx:id="colPlatMode" text="ACCESS MODE" prefWidth="240"/>
+                    </columns>
+                </TableView>
+            </VBox>
+        </VBox>
+    </HBox>
+</VBox>
