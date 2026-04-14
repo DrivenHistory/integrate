@@ -14,7 +14,9 @@ import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.*;
 import javafx.scene.layout.GridPane;
@@ -25,159 +27,484 @@ import javafx.stage.Stage;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class ConnectionsController {
 
-    @FXML private VBox cardsContainer;
+    // ── Vendor tab ────────────────────────────────────────────────────────────
+    @FXML private VBox  vendorListContainer;
+    @FXML private VBox  vendorDetailPane;
     @FXML private Label summaryLabel;
     @FXML private Label summaryDot;
 
+    private PlatformConnector selectedConnector = null;
+
+    // ── Tab controls ──────────────────────────────────────────────────────────
+    @FXML private HBox vendorPane;
+    @FXML private HBox statePane;
+    @FXML private Button     btnTabVendors;
+    @FXML private Button     btnTabStates;
+
+    // ── State tab ─────────────────────────────────────────────────────────────
+    @FXML private VBox stateListContainer;
+    @FXML private VBox stateDetailPane;
+
+    private String selectedState = null;   // currently highlighted state row
+
+    // ── Constants ─────────────────────────────────────────────────────────────
+
+    private static final List<String> ALL_STATES = List.of(
+        "Alabama","Alaska","Arizona","Arkansas","California","Colorado",
+        "Connecticut","Delaware","Florida","Georgia","Hawaii","Idaho",
+        "Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana",
+        "Maine","Maryland","Massachusetts","Michigan","Minnesota",
+        "Mississippi","Missouri","Montana","Nebraska","Nevada",
+        "New Hampshire","New Jersey","New Mexico","New York",
+        "North Carolina","North Dakota","Ohio","Oklahoma","Oregon",
+        "Pennsylvania","Rhode Island","South Carolina","South Dakota",
+        "Tennessee","Texas","Utah","Vermont","Virginia","Washington",
+        "West Virginia","Wisconsin","Wyoming"
+    );
+
+    private static final List<String> ALL_SPORTS = List.of(
+        "Baseball","Basketball","Cross Country","Field Hockey","Football",
+        "Golf","Ice Hockey","Lacrosse","Soccer","Softball",
+        "Swimming & Diving","Tennis","Track & Field","Volleyball","Wrestling"
+    );
+
+    private static final List<String> ALL_YEARS = List.of(
+        "22-23","23-24","24-25","25-26"
+    );
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
     @FXML
     public void initialize() {
-        refreshCards();
+        buildVendorList();
+        buildStateList();
     }
 
-    private void refreshCards() {
-        if (App.mainController != null) App.mainController.refreshPlatformStatus();
-        cardsContainer.getChildren().clear();
+    // ── Tab switching ─────────────────────────────────────────────────────────
 
-        // Separate active from coming-soon
-        List<PlatformConnector> active = Arrays.stream(App.syncEngine.getConnectors())
-            .filter(c -> !isComingSoon(c.getPlatformName()))
-            .collect(java.util.stream.Collectors.toList());
-        List<PlatformConnector> comingSoon = Arrays.stream(App.syncEngine.getConnectors())
-            .filter(c -> isComingSoon(c.getPlatformName()))
-            .collect(java.util.stream.Collectors.toList());
+    @FXML
+    private void onTabVendors() {
+        vendorPane.setVisible(true);  vendorPane.setManaged(true);
+        statePane.setVisible(false);  statePane.setManaged(false);
+        btnTabVendors.getStyleClass().add("seg-btn-active");
+        btnTabStates.getStyleClass().remove("seg-btn-active");
+    }
 
-        // Sort active by current sync_order (0 sorts last), then normalize to contiguous 1-based values
-        List<PlatformConnector> activeSorted = active.stream()
-            .sorted(java.util.Comparator.comparingInt(c -> {
-                int o = App.db.getPlatformConfig(c.getPlatformName()).getSyncOrder();
-                return o <= 0 ? Integer.MAX_VALUE : o;
-            }))
-            .collect(java.util.stream.Collectors.toList());
+    @FXML
+    private void onTabStates() {
+        vendorPane.setVisible(false); vendorPane.setManaged(false);
+        statePane.setVisible(true);   statePane.setManaged(true);
+        btnTabStates.getStyleClass().add("seg-btn-active");
+        btnTabVendors.getStyleClass().remove("seg-btn-active");
+        // Auto-select first state if none selected
+        if (selectedState == null && !ALL_STATES.isEmpty()) {
+            selectState(ALL_STATES.get(0));
+        }
+    }
 
-        // Write normalized 1-based orders back to DB (fixes gaps, zeros, and duplicates)
-        for (int i = 0; i < activeSorted.size(); i++) {
-            int desired = i + 1;
-            String p = activeSorted.get(i).getPlatformName();
-            if (App.db.getPlatformConfig(p).getSyncOrder() != desired) {
-                App.db.updateSyncOrder(p, desired);
+    // ── State list ────────────────────────────────────────────────────────────
+
+    private void buildStateList() {
+        stateListContainer.getChildren().clear();
+        for (String state : ALL_STATES) {
+            HBox row = buildStateRow(state);
+            stateListContainer.getChildren().add(row);
+        }
+    }
+
+    private HBox buildStateRow(String state) {
+        HBox row = new HBox(10);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.getStyleClass().add("state-list-row");
+        row.setUserData(state);
+
+        // Enabled toggle dot
+        boolean enabled = isStateEnabled(state);
+        Label dot = new Label("●");
+        dot.getStyleClass().add(enabled ? "status-dot-connected" : "status-dot-disconnected");
+        dot.setStyle("-fx-font-size: 8px;");
+
+        Label name = new Label(state);
+        name.getStyleClass().add("state-row-name");
+        HBox.setHgrow(name, Priority.ALWAYS);
+
+        row.getChildren().addAll(dot, name);
+        row.setOnMouseClicked(e -> selectState(state));
+        return row;
+    }
+
+    private void selectState(String state) {
+        selectedState = state;
+        // Update highlight on all rows
+        stateListContainer.getChildren().forEach(node -> {
+            if (node instanceof HBox row) {
+                boolean active = state.equals(row.getUserData());
+                if (active) {
+                    if (!row.getStyleClass().contains("state-list-row-active"))
+                        row.getStyleClass().add("state-list-row-active");
+                } else {
+                    row.getStyleClass().remove("state-list-row-active");
+                }
             }
-        }
-
-        // Build final list: active (ordered 1…N) then coming-soon at end
-        List<PlatformConnector> connectors = new java.util.ArrayList<>(activeSorted);
-        connectors.addAll(comingSoon);
-
-        ColumnConstraints col1 = new ColumnConstraints();
-        col1.setPercentWidth(50);
-        col1.setHgrow(Priority.ALWAYS);
-
-        ColumnConstraints col2 = new ColumnConstraints();
-        col2.setPercentWidth(50);
-        col2.setHgrow(Priority.ALWAYS);
-
-        GridPane grid = new GridPane();
-        grid.setHgap(12);
-        grid.setVgap(12);
-        grid.getColumnConstraints().addAll(col1, col2);
-        grid.setMaxWidth(Double.MAX_VALUE);
-        VBox.setVgrow(grid, Priority.ALWAYS);
-
-        for (int i = 0; i < connectors.size(); i++) {
-            VBox card = buildPlatformCard(connectors.get(i));
-            GridPane.setFillWidth(card, true);
-            GridPane.setHgrow(card, Priority.ALWAYS);
-            grid.add(card, i % 2, i / 2);
-        }
-
-        cardsContainer.getChildren().add(grid);
-        updateSummary(connectors);
+        });
+        buildStateDetail(state);
     }
 
-    private VBox buildPlatformCard(PlatformConnector connector) {
+    // ── State detail panel ────────────────────────────────────────────────────
+
+    private void buildStateDetail(String state) {
+        stateDetailPane.getChildren().clear();
+
+        Set<String> savedSports = loadStateSports(state);
+        Set<String> savedYears  = loadStateYears(state);
+
+        // ── Header ──
+        HBox header = new HBox();
+        header.getStyleClass().add("state-detail-header");
+        header.setAlignment(Pos.CENTER_LEFT);
+        Label title = new Label(state);
+        title.getStyleClass().add("state-detail-title");
+        header.getChildren().add(title);
+
+        // ── Years section ──
+        Label yearsHeading = new Label("SEASONS TO SYNC");
+        yearsHeading.getStyleClass().add("state-section-heading");
+
+        HBox yearsRow = new HBox(16);
+        yearsRow.setAlignment(Pos.CENTER_LEFT);
+        yearsRow.getStyleClass().add("state-years-row");
+
+        List<CheckBox> yearBoxes = new ArrayList<>();
+        for (String year : ALL_YEARS) {
+            CheckBox cb = new CheckBox(year);
+            cb.getStyleClass().add("state-checkbox");
+            cb.setSelected(savedYears.contains(year));
+            yearBoxes.add(cb);
+            yearsRow.getChildren().add(cb);
+        }
+
+        // ── Sports section ──
+        Label sportsHeading = new Label("SPORTS TO SYNC");
+        sportsHeading.getStyleClass().add("state-section-heading");
+
+        // 3-column grid of sport checkboxes
+        GridPane sportsGrid = new GridPane();
+        sportsGrid.setHgap(16);
+        sportsGrid.setVgap(10);
+        sportsGrid.getStyleClass().add("state-sports-grid");
+
+        List<CheckBox> sportBoxes = new ArrayList<>();
+        for (int i = 0; i < ALL_SPORTS.size(); i++) {
+            String sport = ALL_SPORTS.get(i);
+            CheckBox cb = new CheckBox(sport);
+            cb.getStyleClass().add("state-checkbox");
+            cb.setSelected(savedSports.contains(sport));
+            sportBoxes.add(cb);
+            sportsGrid.add(cb, i % 3, i / 3);
+        }
+
+        // Select All / Clear links
+        HBox sportLinks = new HBox(16);
+        sportLinks.setAlignment(Pos.CENTER_LEFT);
+        Button selectAll = new Button("Select all");
+        selectAll.getStyleClass().add("btn-link");
+        selectAll.setOnAction(e -> sportBoxes.forEach(cb -> cb.setSelected(true)));
+        Button clearAll = new Button("Clear all");
+        clearAll.getStyleClass().add("btn-link");
+        clearAll.setOnAction(e -> sportBoxes.forEach(cb -> cb.setSelected(false)));
+        sportLinks.getChildren().addAll(selectAll, clearAll);
+
+        // ── Save button ──
+        HBox footer = new HBox();
+        footer.getStyleClass().add("state-detail-footer");
+        footer.setAlignment(Pos.CENTER_RIGHT);
+        Button save = new Button("Save");
+        save.getStyleClass().add("btn-primary");
+        save.setOnAction(e -> {
+            Set<String> sports = new LinkedHashSet<>();
+            sportBoxes.stream().filter(CheckBox::isSelected)
+                      .forEach(cb -> sports.add(cb.getText()));
+            Set<String> years = new LinkedHashSet<>();
+            yearBoxes.stream().filter(CheckBox::isSelected)
+                     .forEach(cb -> years.add(cb.getText()));
+
+            saveStateSports(state, sports);
+            saveStateYears(state, years);
+
+            // Refresh the dot colour in the list
+            boolean active = !sports.isEmpty() && !years.isEmpty();
+            stateListContainer.getChildren().forEach(node -> {
+                if (node instanceof HBox row && state.equals(row.getUserData())) {
+                    Label dot = (Label) row.getChildren().get(0);
+                    dot.getStyleClass().setAll(
+                        active ? "status-dot-connected" : "status-dot-disconnected");
+                }
+            });
+        });
+        footer.getChildren().add(save);
+
+        // ── Assemble ──
+        VBox body = new VBox(28);
+        body.getStyleClass().add("state-detail-body");
+        VBox.setVgrow(body, Priority.ALWAYS);
+        body.getChildren().addAll(
+            yearsHeading, yearsRow,
+            sportsHeading, sportLinks, sportsGrid
+        );
+
+        stateDetailPane.getChildren().addAll(header, body, footer);
+    }
+
+    // ── State config persistence (settings table) ─────────────────────────────
+
+    private static String stateKey(String state) {
+        return "state_" + state.toLowerCase().replace(" ", "_");
+    }
+
+    private boolean isStateEnabled(String state) {
+        return !loadStateSports(state).isEmpty() && !loadStateYears(state).isEmpty();
+    }
+
+    private Set<String> loadStateSports(String state) {
+        String raw = App.db.getSetting(stateKey(state) + "_sports", "");
+        Set<String> result = new LinkedHashSet<>();
+        if (!raw.isBlank())
+            for (String s : raw.split(",")) if (!s.isBlank()) result.add(s.trim());
+        return result;
+    }
+
+    private Set<String> loadStateYears(String state) {
+        String raw = App.db.getSetting(stateKey(state) + "_years", "");
+        Set<String> result = new LinkedHashSet<>();
+        if (!raw.isBlank())
+            for (String y : raw.split(",")) if (!y.isBlank()) result.add(y.trim());
+        return result;
+    }
+
+    private void saveStateSports(String state, Set<String> sports) {
+        App.db.setSetting(stateKey(state) + "_sports", String.join(",", sports));
+    }
+
+    private void saveStateYears(String state, Set<String> years) {
+        App.db.setSetting(stateKey(state) + "_years", String.join(",", years));
+    }
+
+    // ── Vendor list (left panel) ──────────────────────────────────────────────
+
+    /** Rebuilds the left vendor list and re-selects the previously selected connector. */
+    private void buildVendorList() {
+        if (App.mainController != null) App.mainController.refreshPlatformStatus();
+        vendorListContainer.getChildren().clear();
+
+        List<PlatformConnector> connectors = sortedConnectors();
+
+        for (PlatformConnector connector : connectors) {
+            HBox row = buildVendorRow(connector);
+            vendorListContainer.getChildren().add(row);
+        }
+
+        // Re-select or auto-select first non-coming-soon connector
+        if (selectedConnector != null) {
+            selectConnector(selectedConnector);
+        } else {
+            connectors.stream().filter(c -> !isComingSoon(c.getPlatformName()))
+                .findFirst().ifPresent(this::selectConnector);
+        }
+
+        updateSummary(connectors);
+        normalizeSyncOrders(connectors);
+    }
+
+    private HBox buildVendorRow(PlatformConnector connector) {
+        String platform = connector.getPlatformName();
+        boolean comingSoon = isComingSoon(platform);
+
+        HBox row = new HBox(10);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.getStyleClass().add("state-list-row");
+        row.setUserData(platform);
+        if (comingSoon) row.setOpacity(0.5);
+
+        Label dot = new Label("●");
+        dot.setStyle("-fx-font-size: 8px;");
+        dot.getStyleClass().add(comingSoon ? "status-dot-unavailable" : "status-dot-unknown");
+
+        VBox nameBox = new VBox(1);
+        HBox.setHgrow(nameBox, Priority.ALWAYS);
+        Label nameLbl = new Label(getPlatformDisplayName(platform));
+        nameLbl.getStyleClass().add("state-row-name");
+        Label descLbl = new Label(getPlatformDescription(platform));
+        descLbl.getStyleClass().add("vendor-row-desc");
+        nameBox.getChildren().addAll(nameLbl, descLbl);
+
+        row.getChildren().addAll(dot, nameBox);
+        row.setOnMouseClicked(e -> selectConnector(connector));
+
+        if (!comingSoon) {
+            // Async connectivity check — updates the dot without blocking the UI
+            boolean isFanX = "fanx".equals(platform);
+            Task<Boolean> check = new Task<>() {
+                @Override protected Boolean call() {
+                    if (isFanX) return connector.isConnected()
+                        && ((com.districthub.connectors.FanXConnector) connector).isAuthenticatedForWrite();
+                    return connector.isConnected();
+                }
+            };
+            check.setOnSucceeded(ev -> {
+                boolean connected = check.getValue();
+                dot.getStyleClass().setAll(connected ? "status-dot-connected" : "status-dot-disconnected");
+            });
+            Thread t = new Thread(check); t.setDaemon(true); t.start();
+        }
+
+        return row;
+    }
+
+    private void selectConnector(PlatformConnector connector) {
+        selectedConnector = connector;
+        String platform = connector.getPlatformName();
+
+        // Highlight selected row
+        vendorListContainer.getChildren().forEach(node -> {
+            if (node instanceof HBox row) {
+                boolean active = platform.equals(row.getUserData());
+                if (active) { if (!row.getStyleClass().contains("state-list-row-active")) row.getStyleClass().add("state-list-row-active"); }
+                else         { row.getStyleClass().remove("state-list-row-active"); }
+            }
+        });
+
+        buildVendorDetail(connector);
+    }
+
+    // ── Vendor detail (right panel) ────────────────────────────────────────────
+
+    private void buildVendorDetail(PlatformConnector connector) {
+        vendorDetailPane.getChildren().clear();
         PlatformConfig config = connector.getConfig();
         String platform = connector.getPlatformName();
         boolean comingSoon = isComingSoon(platform);
 
-        VBox card = new VBox(12);
-        card.getStyleClass().addAll("platform-card", comingSoon ? "card-coming-soon" : "card-disconnected");
-        card.setPadding(new Insets(20));
-        card.setMaxHeight(Double.MAX_VALUE);
-        HBox.setHgrow(card, Priority.ALWAYS);
-        if (comingSoon) card.setOpacity(0.65);
+        // ── Header ──
+        HBox header = new HBox(12);
+        header.setAlignment(Pos.CENTER_LEFT);
+        header.getStyleClass().add("state-detail-header");
 
-        // Top row: name + status badge
-        HBox topRow = new HBox(8);
-        topRow.setAlignment(Pos.CENTER_LEFT);
-        VBox nameSection = new VBox(2);
-        nameSection.setMinWidth(0);
-        Label nameLabel = new Label(getPlatformDisplayName(platform));
-        nameLabel.getStyleClass().add("card-platform-name");
-        nameLabel.setWrapText(false);
-        nameLabel.setMinWidth(0);
-        Label descLabel = new Label(getPlatformDescription(platform));
-        descLabel.getStyleClass().add("card-platform-desc");
-        descLabel.setWrapText(false);
-        descLabel.setMinWidth(0);
-        nameSection.getChildren().addAll(nameLabel, descLabel);
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
+        VBox titleBox = new VBox(3);
+        HBox.setHgrow(titleBox, Priority.ALWAYS);
+        Label titleLbl = new Label(getPlatformDisplayName(platform));
+        titleLbl.getStyleClass().add("state-detail-title");
+        Label descLbl = new Label(getPlatformDescription(platform));
+        descLbl.getStyleClass().add("card-platform-desc");
+        titleBox.getChildren().addAll(titleLbl, descLbl);
 
         Label statusBadge;
         if (comingSoon) {
             statusBadge = new Label("● Coming Soon");
             statusBadge.getStyleClass().add("badge-coming-soon");
         } else {
-            statusBadge = new Label("Checking...");
+            statusBadge = new Label("● Checking...");
             statusBadge.getStyleClass().add("badge-checking");
         }
-        topRow.getChildren().addAll(nameSection, spacer, statusBadge);
+        header.getChildren().addAll(titleBox, statusBadge);
 
-        // Mode + Sync Order row
-        HBox modeRow = new HBox(16);
-        modeRow.setAlignment(Pos.CENTER_LEFT);
-        Label modeLbl = new Label("MODE");
-        modeLbl.getStyleClass().add("meta-label");
-
-        boolean fanxPlatform = "fanx".equals(platform);
-        if (fanxPlatform && !comingSoon) {
-            // FanX: toggle button between READ and READ / WRITE
-            boolean isRW = config.isReadWrite();
-            Label modeVal = new Label(isRW ? "READ / WRITE" : "READ");
-            modeVal.getStyleClass().add(isRW ? "mode-readwrite" : "mode-read");
-            Button toggleBtn = new Button(isRW ? "Set READ Only" : "Enable Write");
-            toggleBtn.getStyleClass().add("btn-secondary");
-            toggleBtn.setStyle("-fx-font-size: 11px; -fx-padding: 3 8;");
-            toggleBtn.setOnAction(e -> {
-                boolean currentlyRW = config.isReadWrite();
-                String newMode = currentlyRW ? "READ" : "READ_WRITE";
-                App.db.updateAccessMode(platform, newMode);
-                refreshCards();
-            });
-            modeRow.getChildren().addAll(modeLbl, modeVal, toggleBtn);
-        } else {
-            // All other platforms: locked READ
-            Label modeVal = new Label("READ");
-            modeVal.getStyleClass().add("mode-read");
-            modeRow.getChildren().addAll(modeLbl, modeVal);
-        }
+        // ── Body ──
+        VBox body = new VBox(20);
+        body.getStyleClass().add("state-detail-body");
+        VBox.setVgrow(body, Priority.ALWAYS);
 
         if (!comingSoon) {
-            // Sync order control: [▲] [n] [▼]
-            // ▲/▼ swaps this platform with its neighbour in the sorted active list,
-            // then refreshes the whole card grid so visual order always matches DB order.
-            Region modeSpacer = new Region();
-            HBox.setHgrow(modeSpacer, Priority.ALWAYS);
+            // School name
+            HBox schoolRow = new HBox(10);
+            schoolRow.setAlignment(Pos.CENTER_LEFT);
+            Label schoolLbl = new Label("SCHOOL");
+            schoolLbl.getStyleClass().add("meta-label");
+            schoolLbl.setMinWidth(90);
+            TextField schoolField = new TextField();
+            schoolField.setPromptText("Your school name (e.g. Mercer Island)");
+            schoolField.getStyleClass().add("url-field");
+            HBox.setHgrow(schoolField, Priority.ALWAYS);
+            String existingSchool = config.getSchoolName();
+            if (existingSchool != null && !existingSchool.isBlank()) schoolField.setText(existingSchool);
+            schoolField.textProperty().addListener((obs, old, val) -> App.db.updateSchoolName(platform, val.trim()));
+            schoolRow.getChildren().addAll(schoolLbl, schoolField);
+            body.getChildren().add(schoolRow);
 
+            // URL / ID field
+            if (needsUrlConfig(platform)) {
+                HBox urlRow = new HBox(10);
+                urlRow.setAlignment(Pos.CENTER_LEFT);
+                boolean isFanX = "fanx".equals(platform);
+                boolean isMaxPreps = "maxpreps".equals(platform);
+                Label urlLbl = new Label(isFanX ? "SCHOOL ID" : "URL");
+                urlLbl.getStyleClass().add("meta-label");
+                urlLbl.setMinWidth(90);
+                TextField urlField = new TextField();
+                urlField.setPromptText(isFanX
+                    ? "Your FanX school ID (e.g. WASNAPMOBILE)"
+                    : isMaxPreps ? "Use \"Find School\" to locate your school's MaxPreps page"
+                                 : "https://www.homecampus.com/schools/your-school");
+                urlField.getStyleClass().add("url-field");
+                HBox.setHgrow(urlField, Priority.ALWAYS);
+                String existing = config.getEndpoint();
+                if (existing != null && !existing.isBlank()) urlField.setText(existing);
+                urlField.textProperty().addListener((obs, oldVal, newVal) ->
+                    App.db.updateEndpoint(platform, newVal.trim()));
+                if (isFanX) {
+                    javafx.scene.control.Tooltip.install(urlField, new javafx.scene.control.Tooltip(
+                        "Find it in your FanX portal URL: manage.snap.app/fanx-portal/schools/{schoolId}"));
+                    urlRow.getChildren().addAll(urlLbl, urlField);
+                } else {
+                    Button findBtn = new Button("Find School");
+                    findBtn.getStyleClass().add("btn-secondary");
+                    findBtn.setOnAction(e -> openSchoolFinder(platform, urlField));
+                    urlRow.getChildren().addAll(urlLbl, urlField, findBtn);
+                }
+                body.getChildren().add(urlRow);
+            }
+
+            // Mode row
+            HBox modeRow = new HBox(12);
+            modeRow.setAlignment(Pos.CENTER_LEFT);
+            Label modeLbl = new Label("MODE");
+            modeLbl.getStyleClass().add("meta-label");
+            modeLbl.setMinWidth(90);
+
+            if ("fanx".equals(platform)) {
+                boolean isRW = config.isReadWrite();
+                Label modeVal = new Label(isRW ? "READ / WRITE" : "READ");
+                modeVal.getStyleClass().add(isRW ? "mode-readwrite" : "mode-read");
+                Button toggleBtn = new Button(isRW ? "Set READ Only" : "Enable Write");
+                toggleBtn.getStyleClass().add("btn-secondary");
+                toggleBtn.setStyle("-fx-font-size: 11px; -fx-padding: 3 8;");
+                toggleBtn.setOnAction(e -> {
+                    App.db.updateAccessMode(platform, config.isReadWrite() ? "READ" : "READ_WRITE");
+                    buildVendorList();
+                });
+                modeRow.getChildren().addAll(modeLbl, modeVal, toggleBtn);
+            } else {
+                Label modeVal = new Label("READ");
+                modeVal.getStyleClass().add("mode-read");
+                modeRow.getChildren().addAll(modeLbl, modeVal);
+            }
+
+            // Sync order row
+            HBox orderRow = new HBox(8);
+            orderRow.setAlignment(Pos.CENTER_LEFT);
             Label orderLbl = new Label("SYNC ORDER");
             orderLbl.getStyleClass().add("meta-label");
+            orderLbl.setMinWidth(90);
 
-            Label orderVal = new Label(String.valueOf(config.getSyncOrder() <= 0 ? 1 : config.getSyncOrder()));
+            int currentOrder = config.getSyncOrder() <= 0 ? 1 : config.getSyncOrder();
+            Label orderVal = new Label(String.valueOf(currentOrder));
             orderVal.setStyle("-fx-text-fill: #E5E7EB; -fx-font-size: 13px; -fx-font-weight: bold; -fx-min-width: 24px; -fx-alignment: center;");
 
             Button upBtn   = new Button("▲");
@@ -185,213 +512,151 @@ public class ConnectionsController {
             upBtn.getStyleClass().add("btn-order");
             downBtn.getStyleClass().add("btn-order");
 
-            // Returns active (non-coming-soon) connectors sorted by current DB sync_order, 1-based and contiguous
-            java.util.function.Supplier<List<PlatformConnector>> sortedActive = () ->
-                java.util.Arrays.stream(App.syncEngine.getConnectors())
+            java.util.function.Supplier<List<PlatformConnector>> activeSorted = () ->
+                Arrays.stream(App.syncEngine.getConnectors())
                     .filter(c -> !isComingSoon(c.getPlatformName()))
-                    .sorted(java.util.Comparator.comparingInt(
-                        c -> App.db.getPlatformConfig(c.getPlatformName()).getSyncOrder()))
+                    .sorted(java.util.Comparator.comparingInt(c ->
+                        App.db.getPlatformConfig(c.getPlatformName()).getSyncOrder()))
                     .collect(java.util.stream.Collectors.toList());
 
             upBtn.setOnAction(e -> {
-                List<PlatformConnector> sorted = sortedActive.get();
-                int idx = -1;
-                for (int i = 0; i < sorted.size(); i++) {
-                    if (sorted.get(i).getPlatformName().equals(platform)) { idx = i; break; }
-                }
-                if (idx > 0) {
-                    String otherPlatform = sorted.get(idx - 1).getPlatformName();
-                    int myOrder    = App.db.getPlatformConfig(platform).getSyncOrder();
-                    int otherOrder = App.db.getPlatformConfig(otherPlatform).getSyncOrder();
-                    App.db.updateSyncOrder(platform, otherOrder);
-                    App.db.updateSyncOrder(otherPlatform, myOrder);
-                    refreshCards();
+                List<PlatformConnector> sorted = activeSorted.get();
+                for (int i = 1; i < sorted.size(); i++) {
+                    if (sorted.get(i).getPlatformName().equals(platform)) {
+                        String other = sorted.get(i - 1).getPlatformName();
+                        int a = App.db.getPlatformConfig(platform).getSyncOrder();
+                        int b = App.db.getPlatformConfig(other).getSyncOrder();
+                        App.db.updateSyncOrder(platform, b);
+                        App.db.updateSyncOrder(other, a);
+                        buildVendorList();
+                        break;
+                    }
                 }
             });
             downBtn.setOnAction(e -> {
-                List<PlatformConnector> sorted = sortedActive.get();
-                int idx = -1;
-                for (int i = 0; i < sorted.size(); i++) {
-                    if (sorted.get(i).getPlatformName().equals(platform)) { idx = i; break; }
-                }
-                if (idx >= 0 && idx < sorted.size() - 1) {
-                    String otherPlatform = sorted.get(idx + 1).getPlatformName();
-                    int myOrder    = App.db.getPlatformConfig(platform).getSyncOrder();
-                    int otherOrder = App.db.getPlatformConfig(otherPlatform).getSyncOrder();
-                    App.db.updateSyncOrder(platform, otherOrder);
-                    App.db.updateSyncOrder(otherPlatform, myOrder);
-                    refreshCards();
+                List<PlatformConnector> sorted = activeSorted.get();
+                for (int i = 0; i < sorted.size() - 1; i++) {
+                    if (sorted.get(i).getPlatformName().equals(platform)) {
+                        String other = sorted.get(i + 1).getPlatformName();
+                        int a = App.db.getPlatformConfig(platform).getSyncOrder();
+                        int b = App.db.getPlatformConfig(other).getSyncOrder();
+                        App.db.updateSyncOrder(platform, b);
+                        App.db.updateSyncOrder(other, a);
+                        buildVendorList();
+                        break;
+                    }
                 }
             });
+            orderRow.getChildren().addAll(orderLbl, upBtn, orderVal, downBtn);
 
-            modeRow.getChildren().addAll(modeSpacer, orderLbl, upBtn, orderVal, downBtn);
+            body.getChildren().addAll(modeRow, orderRow);
         }
 
-        Region filler = new Region();
-        VBox.setVgrow(filler, Priority.ALWAYS);
+        // ── Footer (action buttons) ──
+        HBox footer = new HBox(10);
+        footer.getStyleClass().add("state-detail-footer");
+        footer.setAlignment(Pos.CENTER_LEFT);
 
-        if (comingSoon) {
-            // Coming Soon cards: name/desc only — no school field, no URL field, no action buttons
-            card.getChildren().addAll(topRow, modeRow, filler);
-        } else {
-            // School Name row
-            HBox schoolRow = new HBox(8);
-            schoolRow.setAlignment(Pos.CENTER_LEFT);
-            Label schoolLbl = new Label("SCHOOL");
-            schoolLbl.getStyleClass().add("meta-label");
-            TextField schoolField = new TextField();
-            schoolField.setPromptText("Your school name (e.g. Mercer Island)");
-            schoolField.getStyleClass().add("url-field");
-            HBox.setHgrow(schoolField, Priority.ALWAYS);
-            String existingSchool = config.getSchoolName();
-            if (existingSchool != null && !existingSchool.isBlank()) schoolField.setText(existingSchool);
-            // Save on every keystroke — avoids data loss when sync/disconnect rebuilds the card
-            schoolField.textProperty().addListener((obs, old, val) ->
-                App.db.updateSchoolName(platform, val.trim()));
-            schoolField.setOnAction(e -> App.db.updateSchoolName(platform, schoolField.getText().trim()));
-            schoolRow.getChildren().addAll(schoolLbl, schoolField);
-            card.getChildren().add(schoolRow);
-
-            // URL / ID config row (for platforms with configurable endpoints)
-            if (needsUrlConfig(platform)) {
-                HBox urlRow = new HBox(8);
-                urlRow.setAlignment(Pos.CENTER_LEFT);
-                boolean isFanX = "fanx".equals(platform);
-                boolean isMaxPreps = "maxpreps".equals(platform);
-                Label urlLbl = new Label(isFanX ? "SCHOOL ID" : "URL");
-                urlLbl.getStyleClass().add("meta-label");
-                TextField urlField = new TextField();
-                String promptText = isFanX
-                    ? "Your FanX school ID (e.g. WASNAPMOBILE)"
-                    : isMaxPreps
-                        ? "Use \"Find School\" to locate your school's MaxPreps page"
-                        : "https://www.homecampus.com/schools/your-school";
-                urlField.setPromptText(promptText);
-                urlField.getStyleClass().add("url-field");
-                HBox.setHgrow(urlField, Priority.ALWAYS);
-                String existing = config.getEndpoint();
-                if (existing != null && !existing.isBlank()) urlField.setText(existing);
-                // Save on every keystroke — avoids data loss when card is rebuilt.
-                // For FanX, also refresh the card when the ID goes from blank↔populated
-                // so the Connect button enable state updates immediately.
-                urlField.textProperty().addListener((obs, oldVal, newVal) -> {
-                    App.db.updateEndpoint(platform, newVal.trim());
-                    if ("fanx".equals(platform)) {
-                        boolean wasBlank = oldVal == null || oldVal.isBlank();
-                        boolean nowBlank = newVal == null || newVal.isBlank();
-                        if (wasBlank != nowBlank) refreshCards();
-                    }
-                });
-                urlField.setOnAction(e -> App.db.updateEndpoint(platform, urlField.getText().trim()));
-                if (!isFanX) {
-                    Button findBtn = new Button("Find School");
-                    findBtn.getStyleClass().add("btn-secondary");
-                    findBtn.setOnAction(e -> openSchoolFinder(platform, urlField));
-                    String tipText = "maxpreps".equals(platform)
-                        ? "Navigate to the school's main page (e.g. maxpreps.com/wa/city/school-name/) and click \"Use This Page\" — the connector will auto-discover all sports and levels from there."
-                        : "Navigate to your school's page and click \"Use This Page\".";
-                    javafx.scene.control.Tooltip tip = new javafx.scene.control.Tooltip(tipText);
-                    tip.setWrapText(true);
-                    tip.setPrefWidth(340);
-                    javafx.scene.control.Tooltip.install(findBtn, tip);
-                    urlRow.getChildren().addAll(urlLbl, urlField, findBtn);
-                } else {
-                    javafx.scene.control.Tooltip tip = new javafx.scene.control.Tooltip(
-                        "Enter the FanX School ID for your institution. " +
-                        "Find it in your FanX portal URL: manage.snap.app/fanx-portal/schools/{schoolId}");
-                    tip.setWrapText(true);
-                    tip.setPrefWidth(320);
-                    javafx.scene.control.Tooltip.install(urlField, tip);
-                    urlRow.getChildren().addAll(urlLbl, urlField);
-                }
-                card.getChildren().add(urlRow);
-            }
-
-            // Action buttons
-            HBox actionsRow = new HBox(8);
-            // Show Connect / Open Session for cookie-authenticated platforms
-            // (URL-config platforms that still use WebView login, e.g. FanX, also get buttons)
+        if (!comingSoon) {
             boolean needsCookieLogin = !needsUrlConfig(platform) || "fanx".equals(platform);
-            // Hoist connectBtn so the checkTask closure can grey it out when connected
             final Button connectBtn;
             if (needsCookieLogin) {
                 connectBtn = new Button("Connect");
                 connectBtn.getStyleClass().add("btn-primary");
                 connectBtn.setOnAction(e -> openLoginWindow(connector));
-
-                // For FanX, disable Connect until a School ID is entered
                 if ("fanx".equals(platform)) {
                     boolean hasId = config.getEndpoint() != null && !config.getEndpoint().isBlank();
                     if (!hasId) {
                         connectBtn.setDisable(true);
-                        connectBtn.getStyleClass().removeAll("btn-primary");
-                        connectBtn.getStyleClass().add("btn-secondary");
+                        connectBtn.getStyleClass().setAll("btn-secondary");
                         javafx.scene.control.Tooltip.install(connectBtn,
                             new javafx.scene.control.Tooltip("Enter your FanX School ID above before connecting"));
                     }
-                    // Re-enable when School ID field is populated — find the urlField via listener
-                    // The urlField listener saves to DB; we watch the card's children for the field
-                    // Simpler: listen on the endpoint property and refresh the card
                 }
-
                 Button openSessionBtn = new Button("Open Session");
                 openSessionBtn.getStyleClass().add("btn-secondary");
                 openSessionBtn.setOnAction(e -> openSessionWindow(connector));
-                actionsRow.getChildren().addAll(connectBtn, openSessionBtn);
+                footer.getChildren().addAll(connectBtn, openSessionBtn);
             } else {
                 connectBtn = null;
             }
+
             Button syncBtn = new Button("Sync Now");
             syncBtn.getStyleClass().add("btn-primary");
             syncBtn.setOnAction(e -> syncConnector(connector, syncBtn));
-            actionsRow.getChildren().add(syncBtn);
+
             Button disconnectBtn = new Button("Disconnect");
             disconnectBtn.getStyleClass().add("btn-danger");
             disconnectBtn.setOnAction(e -> disconnect(connector));
-            actionsRow.getChildren().add(disconnectBtn);
+
             Button clearBtn = new Button("Clear Data");
             clearBtn.getStyleClass().add("btn-secondary");
             clearBtn.setOnAction(e -> clearPlatformData(connector));
-            actionsRow.getChildren().add(clearBtn);
 
-            card.getChildren().addAll(topRow, modeRow, filler, actionsRow);
+            footer.getChildren().addAll(syncBtn, disconnectBtn, clearBtn);
 
-            // For FanX: only show Connected when the write-auth health check passes.
-            // Any other state (no school ID, no cookies, expired session) → Disconnected.
-            boolean isFanXCard = "fanx".equals(platform);
+            // Async connectivity check — updates header badge and connect button state
+            boolean isFanX = "fanx".equals(platform);
             Task<Boolean> checkTask = new Task<>() {
                 @Override protected Boolean call() {
-                    if (isFanXCard) {
-                        // isConnected() checks school ID + hasCookies; isAuthenticatedForWrite()
-                        // verifies the session is still live via health-check endpoint
-                        return connector.isConnected()
-                            && ((com.districthub.connectors.FanXConnector) connector).isAuthenticatedForWrite();
-                    }
+                    if (isFanX) return connector.isConnected()
+                        && ((com.districthub.connectors.FanXConnector) connector).isAuthenticatedForWrite();
                     return connector.isConnected();
                 }
             };
             checkTask.setOnSucceeded(e -> {
                 boolean connected = checkTask.getValue();
-
                 statusBadge.setText(connected ? "● Connected" : "● Disconnected");
-                statusBadge.getStyleClass().removeAll("badge-checking", "badge-connected", "badge-disconnected");
-                statusBadge.getStyleClass().add(connected ? "badge-connected" : "badge-disconnected");
-                card.getStyleClass().removeAll("card-connected", "card-disconnected");
-                card.getStyleClass().add(connected ? "card-connected" : "card-disconnected");
-
-                // Grey out Connect button only when actually connected
+                statusBadge.getStyleClass().setAll(connected ? "badge-connected" : "badge-disconnected");
                 if (connectBtn != null) {
-                    connectBtn.getStyleClass().removeAll("btn-primary", "btn-secondary");
-                    connectBtn.getStyleClass().add(connected ? "btn-secondary" : "btn-primary");
+                    connectBtn.getStyleClass().setAll(connected ? "btn-secondary" : "btn-primary");
                     connectBtn.setDisable(connected);
                 }
+                // Also refresh the dot in the list row
+                vendorListContainer.getChildren().forEach(node -> {
+                    if (node instanceof HBox row && platform.equals(row.getUserData())) {
+                        Label dot = (Label) row.getChildren().get(0);
+                        dot.getStyleClass().setAll(connected ? "status-dot-connected" : "status-dot-disconnected");
+                    }
+                });
             });
-            Thread t = new Thread(checkTask);
-            t.setDaemon(true);
-            t.start();
+            Thread t = new Thread(checkTask); t.setDaemon(true); t.start();
         }
 
-        return card;
+        vendorDetailPane.getChildren().addAll(header, body, footer);
+        VBox.setVgrow(body, Priority.ALWAYS);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Returns all connectors in sort order: active (by sync_order) then coming-soon. */
+    private List<PlatformConnector> sortedConnectors() {
+        List<PlatformConnector> active = Arrays.stream(App.syncEngine.getConnectors())
+            .filter(c -> !isComingSoon(c.getPlatformName()))
+            .sorted(java.util.Comparator.comparingInt(c -> {
+                int o = App.db.getPlatformConfig(c.getPlatformName()).getSyncOrder();
+                return o <= 0 ? Integer.MAX_VALUE : o;
+            }))
+            .collect(java.util.stream.Collectors.toList());
+        List<PlatformConnector> comingSoon = Arrays.stream(App.syncEngine.getConnectors())
+            .filter(c -> isComingSoon(c.getPlatformName()))
+            .collect(java.util.stream.Collectors.toList());
+        List<PlatformConnector> all = new ArrayList<>(active);
+        all.addAll(comingSoon);
+        return all;
+    }
+
+    /** Writes contiguous 1-based sync_order values back to DB to fix any gaps or duplicates. */
+    private void normalizeSyncOrders(List<PlatformConnector> connectors) {
+        List<PlatformConnector> active = connectors.stream()
+            .filter(c -> !isComingSoon(c.getPlatformName()))
+            .collect(java.util.stream.Collectors.toList());
+        for (int i = 0; i < active.size(); i++) {
+            int desired = i + 1;
+            String p = active.get(i).getPlatformName();
+            if (App.db.getPlatformConfig(p).getSyncOrder() != desired)
+                App.db.updateSyncOrder(p, desired);
+        }
     }
 
     private void openLoginWindow(PlatformConnector connector) {
@@ -580,7 +845,7 @@ public class ConnectionsController {
             App.mainController.mountAuthWebView(webView);
         }
         loginStage.close();
-        refreshCards();
+        buildVendorList();
     }
 
     /** Maps a platform ID to the cookie domains that carry its session. */
@@ -674,7 +939,7 @@ public class ConnectionsController {
             App.db.updateEndpoint(platform, current);
             App.db.insertSyncLog("INFO", platform, "URL set via finder: " + current);
             finderStage.close();
-            refreshCards();
+            buildVendorList();
         });
 
         engine.locationProperty().addListener((obs, old, newUrl) -> {
@@ -757,7 +1022,7 @@ public class ConnectionsController {
                 + (dirExisted ? " + WebKit cache" : "")
                 + ". Click Connect to re-authenticate.");
         }
-        refreshCards();
+        buildVendorList();
     }
 
     /** Platforms that use a WebView cookie login (not just a URL endpoint). */
