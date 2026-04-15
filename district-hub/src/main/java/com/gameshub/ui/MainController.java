@@ -149,7 +149,7 @@ public class MainController {
         // State associations: show when their underlying connector has a school URL configured
         for (String state : ConnectionsController.ALL_STATES) {
             if (!isStateConnected(state)) continue;
-            HBox row = makeSidebarRow("state_" + state, state + " (State)", "status-dot-connected");
+            HBox row = makeSidebarRow("state_" + state, "State Association - " + state, "status-dot-connected");
             platformStatusContainer.getChildren().add(row);
         }
     }
