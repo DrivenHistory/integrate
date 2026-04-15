@@ -36,6 +36,7 @@ public class App extends Application {
             new ArbiterConnector(sessionStore, db),
             new FanXConnector(sessionStore, db),
             new MaxPrepsConnector(sessionStore, db),
+            new OSAAConnector(sessionStore, db),
             new RankOneConnector(sessionStore, db),
             new FusionPointConnector(sessionStore, db),
             new BoundConnector(sessionStore, db),

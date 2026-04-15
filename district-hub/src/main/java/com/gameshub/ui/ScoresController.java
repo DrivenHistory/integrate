@@ -84,14 +84,12 @@ public class ScoresController {
             return row;
         });
 
-        sportFilter.getItems().addAll("All Sports", "Soccer", "Basketball", "Volleyball",
-            "Baseball", "Softball", "Football", "Track", "Swimming", "Lacrosse",
-            "Lacrosse - Girls", "Lacrosse - Boys", "Field Hockey", "Cross Country",
-            "Tennis", "Golf", "Wrestling", "Ice Hockey");
-        levelFilter.getItems().addAll("All Levels", "Varsity", "Junior Varsity", "Freshman",
-            "Sophomore", "Middle School");
-        platformFilter.getItems().addAll("All Platforms", "Arbiter", "FanX", "MaxPreps",
-            "Rank One", "FusionPoint", "Bound", "Vantage", "Dragonfly", "HomeCampus");
+        sportFilter.getItems().addAll("All Sports", "Football", "Soccer", "Basketball",
+            "Volleyball", "Baseball", "Softball", "Cross Country", "Swimming", "Wrestling",
+            "Track & Field", "Tennis", "Golf", "Lacrosse", "Field Hockey", "Ice Hockey");
+        levelFilter.getItems().addAll("All Levels", "Varsity", "JV", "Junior Varsity",
+            "Freshman", "Sophomore", "Middle School");
+        buildPlatformFilter();
         sportFilter.setValue("All Sports");
         levelFilter.setValue("All Levels");
         platformFilter.setValue("All Platforms");
@@ -111,18 +109,58 @@ public class ScoresController {
         loadGames();
     }
 
+    // Platform IDs that represent a state association source (for the "State Association" filter)
+    private static final java.util.Set<String> STATE_ASSOC_IDS = java.util.Set.of(
+        "osaa", "rschooltoday", "scorebird", "khsaa", "nysphsaa"
+    );
+
+    /**
+     * Builds the platform filter ComboBox dynamically from registered connectors so
+     * new connectors automatically appear without code changes here.
+     * "State Association" is a virtual entry that matches any state-assoc connector.
+     */
+    private void buildPlatformFilter() {
+        platformFilter.getItems().add("All Platforms");
+        platformFilter.getItems().add("State Association");
+        for (var connector : App.syncEngine.getConnectors()) {
+            String id = connector.getPlatformName();
+            platformFilter.getItems().add(platformIdToDisplay(id));
+        }
+    }
+
+    private static String platformIdToDisplay(String id) {
+        return switch (id) {
+            case "arbiter"      -> "Arbiter";
+            case "fanx"         -> "FanX";
+            case "maxpreps"     -> "MaxPreps";
+            case "osaa"         -> "OSAA";
+            case "rankone"      -> "Rank One";
+            case "fusionpoint"  -> "FusionPoint";
+            case "bound"        -> "Bound";
+            case "vantage"      -> "Vantage";
+            case "dragonfly"    -> "Dragonfly";
+            case "homecampus"   -> "HomeCampus";
+            case "rschooltoday" -> "rSchoolToday";
+            case "scorebird"    -> "ScoreBird";
+            default             -> id;
+        };
+    }
+
     private static String platformDisplayToId(String display) {
         return switch (display) {
-            case "Arbiter"    -> "arbiter";
-            case "FanX"       -> "fanx";
-            case "MaxPreps"   -> "maxpreps";
-            case "Rank One"   -> "rankone";
-            case "FusionPoint"-> "fusionpoint";
-            case "Bound"      -> "bound";
-            case "Vantage"    -> "vantage";
-            case "Dragonfly"  -> "dragonfly";
-            case "HomeCampus" -> "homecampus";
-            default           -> display.toLowerCase();
+            case "Arbiter"      -> "arbiter";
+            case "FanX"         -> "fanx";
+            case "MaxPreps"     -> "maxpreps";
+            case "OSAA"         -> "osaa";
+            case "Rank One"     -> "rankone";
+            case "FusionPoint"  -> "fusionpoint";
+            case "Bound"        -> "bound";
+            case "Vantage"      -> "vantage";
+            case "Dragonfly"    -> "dragonfly";
+            case "HomeCampus"   -> "homecampus";
+            case "rSchoolToday" -> "rschooltoday";
+            case "ScoreBird"    -> "scorebird";
+            default             -> display.toLowerCase();
         };
     }
 
@@ -169,9 +207,27 @@ public class ScoresController {
             LocalDate from = dateFrom.getValue();
             LocalDate to = dateTo.getValue();
 
-            if (!"All Sports".equals(sport) && !sport.equalsIgnoreCase(game.getSport())) return false;
-            if (!"All Levels".equals(level) && !level.equalsIgnoreCase(game.getLevel())) return false;
-            if (!"All Platforms".equals(platform)) {
+            // Sport: substring match so "Soccer" catches "Boys Soccer" / "Girls Soccer"
+            if (!"All Sports".equals(sport)) {
+                String gameSport = game.getSport();
+                if (gameSport == null || !gameSport.toLowerCase().contains(sport.toLowerCase())) return false;
+            }
+            // Level: "JV" and "Junior Varsity" are synonymous
+            if (!"All Levels".equals(level)) {
+                String gameLevel = game.getLevel();
+                if (gameLevel == null) return false;
+                boolean matches = gameLevel.equalsIgnoreCase(level)
+                    || ("JV".equalsIgnoreCase(level) && gameLevel.equalsIgnoreCase("Junior Varsity"))
+                    || ("Junior Varsity".equalsIgnoreCase(level) && gameLevel.equalsIgnoreCase("JV"));
+                if (!matches) return false;
+            }
+            if ("State Association".equals(platform)) {
+                // Match any game sourced from a state association connector
+                String sources = game.getSources();
+                if (sources == null) return false;
+                boolean matched = STATE_ASSOC_IDS.stream().anyMatch(sources::contains);
+                if (!matched) return false;
+            } else if (!"All Platforms".equals(platform)) {
                 String pid = platformDisplayToId(platform);
                 if (game.getSources() == null || !game.getSources().contains(pid)) return false;
             }

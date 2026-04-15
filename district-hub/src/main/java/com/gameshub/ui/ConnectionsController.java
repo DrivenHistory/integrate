@@ -152,7 +152,7 @@ public class ConnectionsController {
         Map.entry("North Dakota",   "Own/Proprietary"),
         Map.entry("Ohio",           "MaxPreps"),
         Map.entry("Oklahoma",       "ArbiterSports"),
-        Map.entry("Oregon",         "Own/Proprietary"),
+        Map.entry("Oregon",         "OSAA"),
         Map.entry("Pennsylvania",   "MaxPreps"),
         Map.entry("Rhode Island",   "MaxPreps"),
         Map.entry("South Carolina", "MaxPreps"),
@@ -172,6 +172,7 @@ public class ConnectionsController {
     private static final Map<String, String> PLATFORM_TO_CONNECTOR = Map.of(
         "MaxPreps",       "maxpreps",
         "ArbiterSports",  "arbiter",
+        "OSAA",           "osaa",
         "Bound",          "bound",
         "DragonFly",      "dragonfly",
         "rSchoolToday",   "rschooltoday",
@@ -202,17 +203,27 @@ public class ConnectionsController {
         if (App.mainController != null) App.mainController.refreshPlatformStatus();
         vendorListContainer.getChildren().clear();
 
-        // State association row (top of list when a state is selected)
         String selectedState = stateCombo.getValue();
-        if (selectedState != null && !selectedState.isBlank()) {
-            vendorListContainer.getChildren().add(buildStateAssocRow(selectedState));
-        }
+        boolean stateRowInserted = false;
+        int stateAssocOrder = getStateAssocOrder();   // user-configurable, default 2
 
         List<PlatformConnector> connectors = sortedConnectors();
 
         for (PlatformConnector connector : connectors) {
-            HBox row = buildVendorRow(connector);
-            vendorListContainer.getChildren().add(row);
+            int connOrder = App.db.getPlatformConfig(connector.getPlatformName()).getSyncOrder();
+
+            // Insert state assoc before the first connector whose order >= stateAssocOrder
+            if (!stateRowInserted && selectedState != null && !selectedState.isBlank()
+                    && connOrder >= stateAssocOrder) {
+                vendorListContainer.getChildren().add(buildStateAssocRow(selectedState, stateAssocOrder));
+                stateRowInserted = true;
+            }
+            vendorListContainer.getChildren().add(buildVendorRow(connector));
+        }
+
+        // State assoc order is beyond all connectors — append at the end
+        if (!stateRowInserted && selectedState != null && !selectedState.isBlank()) {
+            vendorListContainer.getChildren().add(buildStateAssocRow(selectedState, stateAssocOrder));
         }
 
         // Re-select or auto-select
@@ -233,7 +244,7 @@ public class ConnectionsController {
 
     // ── State association row & detail ────────────────────────────────────────
 
-    private HBox buildStateAssocRow(String state) {
+    private HBox buildStateAssocRow(String state, int order) {
         String platform = STATE_PLATFORMS.getOrDefault(state, "Unknown");
 
         HBox row = new HBox(10);
@@ -257,9 +268,26 @@ public class ConnectionsController {
         descLbl.getStyleClass().add("vendor-row-desc");
         nameBox.getChildren().addAll(nameLbl, descLbl);
 
-        row.getChildren().addAll(dot, nameBox);
+        // Order badge
+        Label orderBadge = new Label(String.valueOf(order));
+        orderBadge.setStyle("-fx-text-fill: #4A5568; -fx-font-size: 10px; -fx-font-weight: bold;");
+
+        row.getChildren().addAll(dot, nameBox, orderBadge);
         row.setOnMouseClicked(e -> selectStateAssoc(state));
         return row;
+    }
+
+    // ── State assoc order helpers ──────────────────────────────────────────────
+
+    private static final String STATE_ASSOC_ORDER_KEY = "state_assoc_sync_order";
+
+    private int getStateAssocOrder() {
+        String raw = App.db.getSetting(STATE_ASSOC_ORDER_KEY, "2");
+        try { return Math.max(1, Integer.parseInt(raw)); } catch (NumberFormatException e) { return 2; }
+    }
+
+    private void setStateAssocOrder(int order) {
+        App.db.setSetting(STATE_ASSOC_ORDER_KEY, String.valueOf(Math.max(1, order)));
     }
 
     private void selectStateAssoc(String state) {
@@ -330,6 +358,41 @@ public class ConnectionsController {
         body.getStyleClass().add("state-detail-body");
         VBox.setVgrow(body, Priority.ALWAYS);
 
+        // ── SYNC ORDER ──
+        HBox orderRow = new HBox(8);
+        orderRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label orderLbl = new Label("SYNC ORDER");
+        orderLbl.getStyleClass().add("meta-label");
+        orderLbl.setMinWidth(90);
+
+        int currentOrder = getStateAssocOrder();
+        Label orderVal = new Label(String.valueOf(currentOrder));
+        orderVal.setStyle("-fx-text-fill: #E5E7EB; -fx-font-size: 13px; -fx-font-weight: bold;" +
+                          " -fx-min-width: 24px; -fx-alignment: center;");
+
+        Button upBtn   = new Button("▲");
+        Button downBtn = new Button("▼");
+        upBtn.getStyleClass().add("btn-order");
+        downBtn.getStyleClass().add("btn-order");
+
+        upBtn.setOnAction(e -> {
+            int next = getStateAssocOrder() - 1;
+            setStateAssocOrder(next);
+            buildVendorList();          // rebuilds list + re-selects state assoc row
+        });
+        downBtn.setOnAction(e -> {
+            int next = getStateAssocOrder() + 1;
+            setStateAssocOrder(next);
+            buildVendorList();
+        });
+
+        // Disable ▲ when already at position 1
+        upBtn.setDisable(currentOrder <= 1);
+
+        orderRow.getChildren().addAll(orderLbl, upBtn, orderVal, downBtn);
+        body.getChildren().add(orderRow);
+
         // ── SEQUENCE ──
         Label seqHeading = new Label("SEQUENCE");
         seqHeading.getStyleClass().add("meta-label");
@@ -393,11 +456,11 @@ public class ConnectionsController {
                 urlLbl.getStyleClass().add("meta-label");
                 urlLbl.setMinWidth(90);
                 TextField urlField = new TextField();
-                urlField.setPromptText(isFanX
-                    ? "Your FanX school ID"
-                    : "maxpreps".equals(connectorId)
-                        ? "Use \"Find School\" to locate your school"
-                        : "Enter school page URL");
+                urlField.setPromptText(switch (connectorId) {
+                    case "fanx"    -> "Your FanX school ID";
+                    case "maxpreps", "osaa" -> "Use \"Find School\" to locate your school";
+                    default        -> "Enter school page URL";
+                });
                 urlField.getStyleClass().add("url-field");
                 HBox.setHgrow(urlField, Priority.ALWAYS);
                 String existing = config.getEndpoint();
@@ -437,7 +500,11 @@ public class ConnectionsController {
             syncBtn.getStyleClass().add("btn-primary");
             syncBtn.setOnAction(e -> syncConnector(theConnector, syncBtn));
 
-            actionRow.getChildren().addAll(statusBadge, syncBtn);
+            Button clearBtn = new Button("Clear Data");
+            clearBtn.getStyleClass().add("btn-danger");
+            clearBtn.setOnAction(e -> clearPlatformData(theConnector));
+
+            actionRow.getChildren().addAll(statusBadge, syncBtn, clearBtn);
             configBox.getChildren().add(actionRow);
 
             body.getChildren().addAll(configHeading, configBox);
@@ -624,15 +691,16 @@ public class ConnectionsController {
                 HBox urlRow = new HBox(10);
                 urlRow.setAlignment(Pos.CENTER_LEFT);
                 boolean isFanX = "fanx".equals(platform);
-                boolean isMaxPreps = "maxpreps".equals(platform);
                 Label urlLbl = new Label(isFanX ? "SCHOOL ID" : "URL");
                 urlLbl.getStyleClass().add("meta-label");
                 urlLbl.setMinWidth(90);
                 TextField urlField = new TextField();
-                urlField.setPromptText(isFanX
-                    ? "Your FanX school ID (e.g. WASNAPMOBILE)"
-                    : isMaxPreps ? "Use \"Find School\" to locate your school's MaxPreps page"
-                                 : "https://www.homecampus.com/schools/your-school");
+                urlField.setPromptText(switch (platform) {
+                    case "fanx"    -> "Your FanX school ID (e.g. WASNAPMOBILE)";
+                    case "maxpreps"-> "Use \"Find School\" to locate your school's MaxPreps page";
+                    case "osaa"    -> "Use \"Find School\" to find your school on osaa.org";
+                    default        -> "https://www.homecampus.com/schools/your-school";
+                });
                 urlField.getStyleClass().add("url-field");
                 HBox.setHgrow(urlField, Priority.ALWAYS);
                 String existing = config.getEndpoint();
@@ -1095,6 +1163,7 @@ public class ConnectionsController {
     private void openSchoolFinder(String platform, TextField urlField) {
         String startUrl = switch (platform) {
             case "maxpreps"   -> "https://www.maxpreps.com/search/";
+            case "osaa"       -> "https://www.osaa.org/schools/full-members";
             case "homecampus" -> "https://www.homecampus.com/directory";
             default           -> "https://www.google.com";
         };
@@ -1288,7 +1357,7 @@ public class ConnectionsController {
 
     private boolean needsUrlConfig(String platform) {
         return switch (platform) {
-            case "homecampus", "maxpreps", "fanx" -> true;
+            case "homecampus", "maxpreps", "fanx", "osaa" -> true;
             default -> false;
         };
     }
@@ -1299,6 +1368,7 @@ public class ConnectionsController {
             // arbiterlive removed
             case "fanx"        -> "FanX";
             case "maxpreps"    -> "MaxPreps";
+            case "osaa"        -> "OSAA";
             case "rankone"     -> "Rank One";
             case "fusionpoint" -> "FusionPoint";
             case "bound"       -> "Bound";
@@ -1315,6 +1385,7 @@ public class ConnectionsController {
             // arbiterlive removed
             case "fanx"        -> "Fan engagement & ticketing";
             case "maxpreps"    -> "Game results & scores";
+            case "osaa"        -> "Oregon state association schedules & results";
             case "rankone"     -> "Athletic eligibility & compliance";
             case "fusionpoint" -> "Event & facility management";
             case "bound"       -> "Transportation & travel logistics";

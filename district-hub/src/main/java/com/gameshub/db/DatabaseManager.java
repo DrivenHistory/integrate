@@ -37,6 +37,7 @@ public class DatabaseManager {
             createTables();
             seedPlatforms();
             backfillSyncOrders();
+            migrateFanXFirst();
             backfillManualGames();
             backfillAccessModes();
         } catch (Exception e) {
@@ -138,10 +139,13 @@ public class DatabaseManager {
 
     private void seedPlatforms() {
         // platform, default sync_order (0 = not set; active platforms get a default order)
+        // FanX is 1 (primary write target); State Association is conceptually 2 (handled in UI);
+        // other active vendors follow from 3 onward.
         Object[][] platforms = {
-            {"arbiter",      1},
-            {"fanx",         2},
+            {"fanx",         1},
+            {"arbiter",      2},
             {"maxpreps",     3},
+            {"osaa",         0},
             {"rankone",      0},
             {"fusionpoint",  0},
             {"bound",        0},
@@ -164,8 +168,8 @@ public class DatabaseManager {
     /** Sets default sync_order for existing rows that still have 0 (i.e. were seeded before this column was added). */
     private void backfillSyncOrders() {
         Object[][] defaults = {
-            {"arbiter",  1},
-            {"fanx",     2},
+            {"fanx",     1},
+            {"arbiter",  2},
             {"maxpreps", 3}
         };
         String sql = "UPDATE platform_config SET sync_order = ? WHERE platform = ? AND (sync_order = 0 OR sync_order IS NULL)";
@@ -177,6 +181,37 @@ public class DatabaseManager {
             }
         } catch (SQLException e) {
             System.err.println("Warning: backfillSyncOrders failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * One-time migration: ensures FanX is always sync_order 1 (primary write target).
+     * If FanX is currently at any order > 1, everything ranked below it is shifted up
+     * by one to keep the sequence contiguous, then FanX is set to 1.
+     * Idempotent — does nothing if FanX is already at order 1.
+     */
+    private void migrateFanXFirst() {
+        String checkSql = "SELECT sync_order FROM platform_config WHERE platform = 'fanx'";
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(checkSql)) {
+            if (!rs.next()) return;          // FanX row doesn't exist yet — seed will handle it
+            int fanxOrder = rs.getInt(1);
+            if (fanxOrder == 1) return;      // already correct, nothing to do
+
+            // Shift every platform that currently sits between 1 and fanxOrder-1 up by one,
+            // creating a gap at position 1 for FanX.
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "UPDATE platform_config SET sync_order = sync_order + 1 " +
+                    "WHERE platform != 'fanx' AND sync_order >= 1 AND sync_order < ?")) {
+                ps.setInt(1, fanxOrder);
+                ps.executeUpdate();
+            }
+            try (PreparedStatement ps = connection.prepareStatement(
+                    "UPDATE platform_config SET sync_order = 1 WHERE platform = 'fanx'")) {
+                ps.executeUpdate();
+            }
+        } catch (SQLException e) {
+            System.err.println("Warning: migrateFanXFirst failed: " + e.getMessage());
         }
     }
 
