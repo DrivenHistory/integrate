@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<VBox xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.gameshub.ui.SyncLogController"
+      styleClass="main-content">
+
+    <HBox styleClass="content-header" alignment="CENTER_LEFT">
+        <VBox spacing="2">
+            <Label text="Sync Log" styleClass="content-title"/>
+            <Label text="Full message text is included in the export" styleClass="content-subtitle"/>
+        </VBox>
+        <Region HBox.hgrow="ALWAYS"/>
+        <HBox spacing="8" alignment="CENTER_RIGHT">
+            <Button text="Export Log" styleClass="btn-secondary" onAction="#onExportLog"/>
+            <Button text="Clear Log" styleClass="btn-secondary" onAction="#onClearLog"/>
+        </HBox>
+    </HBox>
+
+    <TableView fx:id="logTable" VBox.vgrow="ALWAYS" styleClass="data-table">
+        <columns>
+            <TableColumn fx:id="colLogTime" text="TIME" prefWidth="160"/>
+            <TableColumn fx:id="colLogType" text="TYPE" prefWidth="100"/>
+            <TableColumn fx:id="colLogPlatform" text="PLATFORM" prefWidth="130"/>
+            <TableColumn fx:id="colLogMessage" text="MESSAGE" prefWidth="600"/>
+        </columns>
+    </TableView>
+
+    <Label text="UNRESOLVED CONFLICTS" styleClass="section-label" style="-fx-padding: 12 0 6 0;"/>
+    <TableView fx:id="conflictsTable" prefHeight="200" styleClass="data-table">
+        <columns>
+            <TableColumn fx:id="colConflictGame" text="GAME" prefWidth="200"/>
+            <TableColumn fx:id="colConflictField" text="FIELD" prefWidth="120"/>
+            <TableColumn fx:id="colConflictA" text="PLATFORM A" prefWidth="160"/>
+            <TableColumn fx:id="colConflictB" text="PLATFORM B" prefWidth="160"/>
+            <TableColumn fx:id="colConflictAction" text="" prefWidth="100"/>
+        </columns>
+    </TableView>
+</VBox>

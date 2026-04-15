@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.web.*?>
+<VBox xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.gameshub.ui.DiscoveryController"
+      styleClass="main-content">
+
+    <!-- Header with recording indicator -->
+    <HBox styleClass="discovery-header" alignment="CENTER_LEFT" spacing="10">
+        <Label fx:id="recDot" text="●" style="-fx-text-fill: #EF4444; -fx-font-size: 14px;"/>
+        <Label text="Discovery Mode" styleClass="discovery-title"/>
+        <Label text="—" styleClass="text-muted"/>
+        <Label fx:id="platformLabel" text="Platform" styleClass="text-secondary"/>
+        <Region HBox.hgrow="ALWAYS"/>
+        <Label fx:id="hintLabel" text="Navigate to your schedule page, then wait for detection" styleClass="text-muted"/>
+        <Button fx:id="stopBtn" text="Stop" styleClass="btn-danger" onAction="#onStop"/>
+    </HBox>
+
+    <!-- Steps bar -->
+    <HBox fx:id="stepsBar" styleClass="steps-bar" spacing="8" alignment="CENTER_LEFT"/>
+
+    <!-- Main split: WebView + Discovery Panel -->
+    <HBox VBox.vgrow="ALWAYS">
+        <!-- WebView area -->
+        <VBox HBox.hgrow="ALWAYS">
+            <!-- Browser bar -->
+            <HBox styleClass="browser-bar" spacing="8" alignment="CENTER">
+                <Label fx:id="urlLabel" text="" styleClass="url-label" HBox.hgrow="ALWAYS"/>
+            </HBox>
+            <WebView fx:id="webView" VBox.vgrow="ALWAYS"/>
+        </VBox>
+
+        <!-- Discovery panel -->
+        <VBox fx:id="discoveryPanel" styleClass="discovery-panel" prefWidth="360" spacing="0">
+            <!-- Detection banner -->
+            <HBox fx:id="detectionBanner" styleClass="detection-banner" spacing="10" alignment="CENTER_LEFT">
+                <Label fx:id="detectionIcon" text="🔍"/>
+                <VBox spacing="1">
+                    <Label fx:id="detectionTitle" text="Watching for data tables..." styleClass="detection-title"/>
+                    <Label fx:id="detectionSubtitle" text="" styleClass="detection-sub"/>
+                </VBox>
+            </HBox>
+
+            <!-- Instructions -->
+            <VBox styleClass="disc-instructions" spacing="4">
+                <Label fx:id="stepTitle" text="Step 1 — Navigate" styleClass="disc-step-title"/>
+                <Label fx:id="stepDesc" text="Go to the page with the schedule data you want to capture." styleClass="disc-step-desc" wrapText="true"/>
+            </VBox>
+
+            <!-- Field mapping list -->
+            <Label text="FIELD MAPPING" styleClass="section-label"/>
+            <VBox fx:id="fieldMappingList" spacing="4" styleClass="field-mapping-list"/>
+
+            <Region VBox.vgrow="ALWAYS"/>
+
+            <!-- Footer -->
+            <VBox styleClass="disc-footer" spacing="10">
+                <Button fx:id="addFieldBtn" text="+ Add optional field (Score, Location...)"
+                        styleClass="btn-link" onAction="#onAddField"/>
+                <Separator/>
+                <HBox spacing="8">
+                    <Button fx:id="testExtractBtn" text="Test Extract" styleClass="btn-secondary"
+                            HBox.hgrow="ALWAYS" maxWidth="Infinity" onAction="#onTestExtract"/>
+                    <Button fx:id="saveBtn" text="Save &amp; Finish" styleClass="btn-primary"
+                            HBox.hgrow="ALWAYS" maxWidth="Infinity" onAction="#onSaveFinish"/>
+                </HBox>
+            </VBox>
+        </VBox>
+    </HBox>
+</VBox>
