@@ -34,7 +34,6 @@ public class App extends Application {
         // Build connectors
         PlatformConnector[] connectors = {
             new ArbiterConnector(sessionStore, db),
-            new ArbiterLiveConnector(sessionStore, db),
             new FanXConnector(sessionStore, db),
             new MaxPrepsConnector(sessionStore, db),
             new RankOneConnector(sessionStore, db),

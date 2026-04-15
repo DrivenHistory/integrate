@@ -113,7 +113,6 @@ public class DashboardController {
     private static String platformDisplayToId(String display) {
         return switch (display) {
             case "Arbiter"      -> "arbiter";
-            case "ArbiterLive"  -> "arbiterlive";
             case "FanX"         -> "fanx";
             case "MaxPreps"     -> "maxpreps";
             case "Rank One"     -> "rankone";

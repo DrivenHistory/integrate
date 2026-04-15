@@ -285,12 +285,21 @@ public class ConnectionsController {
     private void buildStateAssocDetail(String state) {
         vendorDetailPane.getChildren().clear();
 
-        String stateUrl  = STATE_URLS.get(state);
-        String platform  = STATE_PLATFORMS.getOrDefault(state, "Unknown");
+        String stateUrl    = STATE_URLS.get(state);
+        String platform    = STATE_PLATFORMS.getOrDefault(state, "Unknown");
         String connectorId = PLATFORM_TO_CONNECTOR.get(platform);
-        boolean hasConnector = connectorId != null
-            && Arrays.stream(App.syncEngine.getConnectors())
-                .anyMatch(c -> connectorId.equals(c.getPlatformName()) && !isComingSoon(c.getPlatformName()));
+
+        // Find the actual connector instance (if any)
+        PlatformConnector matchedConnector = null;
+        if (connectorId != null) {
+            for (PlatformConnector c : App.syncEngine.getConnectors()) {
+                if (connectorId.equals(c.getPlatformName()) && !isComingSoon(c.getPlatformName())) {
+                    matchedConnector = c;
+                    break;
+                }
+            }
+        }
+        boolean hasConnector = matchedConnector != null;
 
         // ── Header ──
         HBox header = new HBox(12);
@@ -317,46 +326,181 @@ public class ConnectionsController {
         header.getChildren().add(titleBox);
 
         // ── Body ──
-        VBox body = new VBox(20);
+        VBox body = new VBox(24);
         body.getStyleClass().add("state-detail-body");
         VBox.setVgrow(body, Priority.ALWAYS);
 
-        // SOURCE row
-        HBox sourceRow = new HBox(10);
-        sourceRow.setAlignment(Pos.CENTER_LEFT);
-        Label sourceLbl = new Label("SOURCE");
-        sourceLbl.getStyleClass().add("meta-label");
-        sourceLbl.setMinWidth(90);
-        Label sourceVal = new Label(platform);
-        sourceVal.setStyle(hasConnector
-            ? "-fx-text-fill: #6EE7B7; -fx-font-size: 13px; -fx-font-weight: bold;"
-            : "-fx-text-fill: #9CA3AF; -fx-font-size: 13px;");
-        sourceRow.getChildren().addAll(sourceLbl, sourceVal);
+        // ── SEQUENCE ──
+        Label seqHeading = new Label("SEQUENCE");
+        seqHeading.getStyleClass().add("meta-label");
 
-        // CONNECTOR row
-        HBox connectorRow = new HBox(10);
-        connectorRow.setAlignment(Pos.CENTER_LEFT);
-        Label connLbl = new Label("CONNECTOR");
-        connLbl.getStyleClass().add("meta-label");
-        connLbl.setMinWidth(90);
+        VBox seqBox = new VBox(6);
+        seqBox.setPadding(new Insets(8, 0, 0, 0));
 
+        // Step 1: State Association
+        HBox step1 = buildSequenceStep("1", state + " State Association",
+            stateUrl != null ? stateUrl : "State athletic association",
+            "#4F6BED", true);
+
+        // Arrow
+        Label arrow1 = new Label("  ↓  Publishes schedules & scores to");
+        arrow1.setStyle("-fx-text-fill: #6B7280; -fx-font-size: 11px; -fx-padding: 2 0 2 24;");
+
+        // Step 2: Data Platform
+        String step2Status;
+        String step2Color;
         if (hasConnector) {
-            Label connVal = new Label(getPlatformDisplayName(connectorId) + "  ✓ available");
-            connVal.setStyle("-fx-text-fill: #6EE7B7; -fx-font-size: 12px;");
-            connectorRow.getChildren().addAll(connLbl, connVal);
+            step2Status = "✓ Connector available";
+            step2Color = "#6EE7B7";
         } else if ("Own/Proprietary".equals(platform)) {
-            Label connVal = new Label("Custom — state runs its own platform");
-            connVal.setStyle("-fx-text-fill: #6B7280; -fx-font-size: 12px;");
-            connectorRow.getChildren().addAll(connLbl, connVal);
+            step2Status = "Custom platform — no connector yet";
+            step2Color = "#F59E0B";
         } else {
-            Label connVal = new Label("No connector yet");
-            connVal.setStyle("-fx-text-fill: #6B7280; -fx-font-size: 12px;");
-            connectorRow.getChildren().addAll(connLbl, connVal);
+            step2Status = "Connector not yet built";
+            step2Color = "#6B7280";
+        }
+        HBox step2 = buildSequenceStep("2", platform, step2Status, step2Color, hasConnector);
+
+        // Arrow
+        Label arrow2 = new Label("  ↓  " + (hasConnector ? "Synced via " + getPlatformDisplayName(connectorId) + " connector" : "Not yet connected"));
+        arrow2.setStyle("-fx-text-fill: #6B7280; -fx-font-size: 11px; -fx-padding: 2 0 2 24;");
+
+        // Step 3: District Hub
+        HBox step3 = buildSequenceStep("3", "District Hub",
+            hasConnector ? "Local database" : "Waiting for connector",
+            hasConnector ? "#6EE7B7" : "#6B7280", hasConnector);
+
+        seqBox.getChildren().addAll(step1, arrow1, step2, arrow2, step3);
+        body.getChildren().addAll(seqHeading, seqBox);
+
+        // ── Connector config (when we have one) ──
+        if (hasConnector) {
+            Label configHeading = new Label("CONNECTION");
+            configHeading.getStyleClass().add("meta-label");
+            configHeading.setPadding(new Insets(8, 0, 0, 0));
+
+            VBox configBox = new VBox(12);
+
+            PlatformConfig config = matchedConnector.getConfig();
+            final PlatformConnector theConnector = matchedConnector;
+
+            // URL / School finder for URL-based connectors
+            if (needsUrlConfig(connectorId)) {
+                boolean isFanX = "fanx".equals(connectorId);
+                HBox urlRow = new HBox(10);
+                urlRow.setAlignment(Pos.CENTER_LEFT);
+                Label urlLbl = new Label(isFanX ? "SCHOOL ID" : "SCHOOL URL");
+                urlLbl.getStyleClass().add("meta-label");
+                urlLbl.setMinWidth(90);
+                TextField urlField = new TextField();
+                urlField.setPromptText(isFanX
+                    ? "Your FanX school ID"
+                    : "maxpreps".equals(connectorId)
+                        ? "Use \"Find School\" to locate your school"
+                        : "Enter school page URL");
+                urlField.getStyleClass().add("url-field");
+                HBox.setHgrow(urlField, Priority.ALWAYS);
+                String existing = config.getEndpoint();
+                if (existing != null && !existing.isBlank()) urlField.setText(existing);
+                urlField.textProperty().addListener((obs, oldVal, newVal) ->
+                    App.db.updateEndpoint(connectorId, newVal.trim()));
+
+                if (isFanX) {
+                    urlRow.getChildren().addAll(urlLbl, urlField);
+                } else {
+                    Button findBtn = new Button("Find School");
+                    findBtn.getStyleClass().add("btn-secondary");
+                    findBtn.setOnAction(e -> openSchoolFinder(connectorId, urlField));
+                    urlRow.getChildren().addAll(urlLbl, urlField, findBtn);
+                }
+                configBox.getChildren().add(urlRow);
+            }
+
+            // Connect / status row
+            HBox actionRow = new HBox(10);
+            actionRow.setAlignment(Pos.CENTER_LEFT);
+
+            Label statusBadge = new Label("● Checking...");
+            statusBadge.getStyleClass().add("badge-checking");
+
+            boolean needsCookie = needsCookieLogin(connectorId);
+            Button connectBtn = null;
+            if (needsCookie) {
+                connectBtn = new Button("Connect");
+                connectBtn.getStyleClass().add("btn-primary");
+                final Button cbRef = connectBtn;
+                connectBtn.setOnAction(e -> openLoginWindow(theConnector));
+                actionRow.getChildren().add(connectBtn);
+            }
+
+            Button syncBtn = new Button("Sync Now");
+            syncBtn.getStyleClass().add("btn-primary");
+            syncBtn.setOnAction(e -> syncConnector(theConnector, syncBtn));
+
+            actionRow.getChildren().addAll(statusBadge, syncBtn);
+            configBox.getChildren().add(actionRow);
+
+            body.getChildren().addAll(configHeading, configBox);
+
+            // Async connectivity check
+            final Button connectBtnFinal = connectBtn;
+            final Label statusRef = statusBadge;
+            boolean isFanX = "fanx".equals(connectorId);
+            Task<Boolean> checkTask = new Task<>() {
+                @Override protected Boolean call() {
+                    if (isFanX) return theConnector.isConnected()
+                        && ((com.districthub.connectors.FanXConnector) theConnector).isAuthenticatedForWrite();
+                    return theConnector.isConnected();
+                }
+            };
+            checkTask.setOnSucceeded(ev -> {
+                boolean connected = checkTask.getValue();
+                statusRef.setText(connected ? "● Connected" : "● Disconnected");
+                statusRef.getStyleClass().setAll(connected ? "badge-connected" : "badge-disconnected");
+                if (connectBtnFinal != null) {
+                    connectBtnFinal.getStyleClass().setAll(connected ? "btn-secondary" : "btn-primary");
+                    connectBtnFinal.setDisable(connected);
+                }
+            });
+            Thread t = new Thread(checkTask); t.setDaemon(true); t.start();
+
+        } else {
+            // No connector — show what's needed
+            Label noConnLabel = new Label(
+                "Own/Proprietary".equals(platform)
+                    ? "This state runs its own scheduling platform. A custom scraper would be needed to pull data."
+                    : "A " + platform + " connector is planned but not yet built.");
+            noConnLabel.setWrapText(true);
+            noConnLabel.setStyle("-fx-text-fill: #6B7280; -fx-font-size: 12px; -fx-padding: 8 0 0 0;");
+            body.getChildren().add(noConnLabel);
         }
 
-        body.getChildren().addAll(sourceRow, connectorRow);
-
         vendorDetailPane.getChildren().addAll(header, body);
+    }
+
+    /** Builds a single step row for the sequence visualization. */
+    private HBox buildSequenceStep(String number, String title, String subtitle,
+                                   String color, boolean active) {
+        HBox step = new HBox(10);
+        step.setAlignment(Pos.CENTER_LEFT);
+        step.setPadding(new Insets(8, 12, 8, 12));
+        step.setStyle("-fx-background-color: " + (active ? "rgba(255,255,255,0.05)" : "transparent")
+            + "; -fx-background-radius: 6;");
+
+        Label num = new Label(number);
+        num.setStyle("-fx-text-fill: " + color + "; -fx-font-size: 14px; -fx-font-weight: bold;"
+            + " -fx-min-width: 20; -fx-alignment: center;");
+
+        VBox textBox = new VBox(1);
+        HBox.setHgrow(textBox, Priority.ALWAYS);
+        Label titleLbl = new Label(title);
+        titleLbl.setStyle("-fx-text-fill: #E5E7EB; -fx-font-size: 13px; -fx-font-weight: bold;");
+        Label subtitleLbl = new Label(subtitle);
+        subtitleLbl.setStyle("-fx-text-fill: " + color + "; -fx-font-size: 11px;");
+        textBox.getChildren().addAll(titleLbl, subtitleLbl);
+
+        step.getChildren().addAll(num, textBox);
+        return step;
     }
 
     private HBox buildVendorRow(PlatformConnector connector) {
@@ -1127,7 +1271,7 @@ public class ConnectionsController {
 
     private boolean needsUrlConfig(String platform) {
         return switch (platform) {
-            case "homecampus", "maxpreps", "fanx", "arbiterlive" -> true;
+            case "homecampus", "maxpreps", "fanx" -> true;
             default -> false;
         };
     }
@@ -1135,7 +1279,7 @@ public class ConnectionsController {
     private String getPlatformDisplayName(String platform) {
         return switch (platform) {
             case "arbiter"     -> "Arbiter";
-            case "arbiterlive" -> "ArbiterLive";
+            // arbiterlive removed
             case "fanx"        -> "FanX";
             case "maxpreps"    -> "MaxPreps";
             case "rankone"     -> "Rank One";
@@ -1151,7 +1295,7 @@ public class ConnectionsController {
     private String getPlatformDescription(String platform) {
         return switch (platform) {
             case "arbiter"     -> "Game scheduling & officials";
-            case "arbiterlive" -> "Public schedules & scores — no login required";
+            // arbiterlive removed
             case "fanx"        -> "Fan engagement & ticketing";
             case "maxpreps"    -> "Game results & scores";
             case "rankone"     -> "Athletic eligibility & compliance";
