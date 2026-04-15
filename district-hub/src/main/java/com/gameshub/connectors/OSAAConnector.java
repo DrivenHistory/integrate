@@ -380,25 +380,37 @@ public class OSAAConnector implements PlatformConnector {
     }
 
     /**
-     * Extracts tab panel ID → level label from OSAA's jQuery UI tab navigation.
+     * Extracts tab panel ID → level label from OSAA's tab navigation.
      * E.g. { "tabs-V" → "Varsity", "tabs-JV" → "JV", "tabs-FR" → "Freshman" }.
      * Returns an empty map if no tab nav is found.
+     *
+     * In the raw server HTML the structure is:
+     *   <div class="tabs view_teams">
+     *     <ul>                                    ← no class; jQuery UI adds classes at runtime
+     *       <li><a href="#tabs-V">Varsity</a></li>
+     *       <li><a href="#tabs-JV">Junior Varsity</a></li>
+     *       <li><a href="#tabs-FR">Freshman</a></li>
+     *     </ul>
+     *     <div id="tabs-V">…schedule…</div>
+     *     <div id="tabs-JV">…schedule…</div>
+     *     <div id="tabs-FR">…schedule…</div>
+     *   </div>
      */
     private Map<String, String> extractTabPanelLevels(Document doc) {
         Map<String, String> result = new LinkedHashMap<>();
-        // OSAA uses jQuery UI tabs: <ul class="ui-tabs-nav"> with <li><a href="#tabs-V">Varsity</a></li>
-        Element tabNav = doc.selectFirst("ul.ui-tabs-nav");
-        if (tabNav == null) return result;
 
-        for (Element li : tabNav.select("li")) {
-            Element a = li.selectFirst("a[href^='#']");
-            if (a == null) continue;
+        // Find links whose href starts with "#tabs-" — these are the level tab links
+        Elements tabLinks = doc.select("a[href^='#tabs-']");
+        for (Element a : tabLinks) {
             String href  = a.attr("href"); // e.g. "#tabs-V"
             String label = a.text().trim();
             if (href.length() > 1 && !label.isEmpty()) {
                 String panelId = href.substring(1); // strip leading '#'
-                String level = mapTabLabel(label);
-                result.put(panelId, level);
+                // Verify a matching panel div exists
+                if (doc.getElementById(panelId) != null) {
+                    String level = mapTabLabel(label);
+                    result.put(panelId, level);
+                }
             }
         }
         return result;
