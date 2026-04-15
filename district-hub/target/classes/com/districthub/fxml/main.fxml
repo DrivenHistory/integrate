@@ -50,42 +50,7 @@
             <!-- Platform status section -->
             <VBox styleClass="platform-status-section" spacing="4">
                 <Label text="PLATFORMS" styleClass="nav-section-label"/>
-                <HBox fx:id="statusArbiter" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
-                    <Label fx:id="dotArbiter" text="●" styleClass="status-dot-unknown"/>
-                    <Label text="Arbiter" styleClass="platform-name"/>
-                </HBox>
-                <HBox fx:id="statusFanX" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
-                    <Label fx:id="dotFanX" text="●" styleClass="status-dot-unknown"/>
-                    <Label text="FanX" styleClass="platform-name"/>
-                </HBox>
-                <HBox fx:id="statusRankOne" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
-                    <Label fx:id="dotRankOne" text="●" styleClass="status-dot-unknown"/>
-                    <Label text="Rank One" styleClass="platform-name"/>
-                </HBox>
-                <HBox fx:id="statusFusion" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
-                    <Label fx:id="dotFusion" text="●" styleClass="status-dot-unknown"/>
-                    <Label text="FusionPoint" styleClass="platform-name"/>
-                </HBox>
-                <HBox fx:id="statusBound" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
-                    <Label fx:id="dotBound" text="●" styleClass="status-dot-unknown"/>
-                    <Label text="Bound" styleClass="platform-name"/>
-                </HBox>
-                <HBox fx:id="statusVantage" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
-                    <Label fx:id="dotVantage" text="●" styleClass="status-dot-unknown"/>
-                    <Label text="Vantage / League Minder" styleClass="platform-name"/>
-                </HBox>
-                <HBox fx:id="statusDragonfly" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
-                    <Label fx:id="dotDragonfly" text="●" styleClass="status-dot-unknown"/>
-                    <Label text="Dragonfly" styleClass="platform-name"/>
-                </HBox>
-                <HBox fx:id="statusHomeCampus" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
-                    <Label fx:id="dotHomeCampus" text="●" styleClass="status-dot-unknown"/>
-                    <Label text="HomeCampus" styleClass="platform-name"/>
-                </HBox>
-                <HBox fx:id="statusMaxPreps" styleClass="platform-status-row" spacing="8" alignment="CENTER_LEFT">
-                    <Label fx:id="dotMaxPreps" text="●" styleClass="status-dot-unknown"/>
-                    <Label text="MaxPreps" styleClass="platform-name"/>
-                </HBox>
+                <VBox fx:id="platformStatusContainer" spacing="4"/>
             </VBox>
         </VBox>
     </left>

@@ -13,6 +13,7 @@ import java.util.List;
 
 public class SettingsController {
 
+    @FXML private TextField homeSchoolField;
     @FXML private CheckBox dailySyncToggle;
     @FXML private CheckBox notifToggle;
     @FXML private Spinner<Integer> syncHourSpinner;
@@ -24,6 +25,11 @@ public class SettingsController {
 
     @FXML
     public void initialize() {
+        // Home school
+        homeSchoolField.setText(App.db.getSetting("home_school", ""));
+        homeSchoolField.textProperty().addListener((obs, o, n) ->
+            App.db.setSetting("home_school", n.trim()));
+
         // Load saved time (stored as "HH:mm" 24-hour)
         String saved = App.db.getSetting("sync_time", "06:00");
         int savedHour24 = 6, savedMin = 0;

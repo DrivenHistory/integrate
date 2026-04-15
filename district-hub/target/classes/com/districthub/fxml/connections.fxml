@@ -1,20 +1,41 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?import javafx.scene.layout.*?>
 <?import javafx.scene.control.*?>
+<?import javafx.collections.FXCollections?>
+<?import java.lang.String?>
 <VBox xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="com.districthub.ui.ConnectionsController"
       styleClass="main-content">
 
+    <!-- ── Header ──────────────────────────────────────────────────────────── -->
     <HBox styleClass="content-header" alignment="CENTER_LEFT" spacing="12">
-        <Label text="Platform Connections" styleClass="content-title"/>
-        <Region HBox.hgrow="ALWAYS"/>
+        <VBox spacing="6" HBox.hgrow="ALWAYS">
+            <Label text="Platform Connections" styleClass="content-title"/>
+            <HBox alignment="CENTER_LEFT" spacing="8">
+                <Label text="STATE" styleClass="meta-label"/>
+                <ComboBox fx:id="stateCombo" promptText="Select state..." styleClass="filter-combo"/>
+            </HBox>
+        </VBox>
+
         <HBox fx:id="summaryPill" styleClass="sync-status-pill" spacing="6" alignment="CENTER">
             <Label fx:id="summaryDot" text="●" styleClass="status-dot-connected"/>
             <Label fx:id="summaryLabel" text="Loading..." styleClass="sync-status-text"/>
         </HBox>
     </HBox>
 
-    <ScrollPane VBox.vgrow="ALWAYS" fitToWidth="true" styleClass="cards-scroll">
-        <VBox fx:id="cardsContainer" spacing="12" styleClass="cards-container"/>
-    </ScrollPane>
+    <!-- ── Connector list ──────────────────────────────────────────────────── -->
+    <HBox VBox.vgrow="ALWAYS" styleClass="state-tab-root">
+
+        <!-- Left: vendor list -->
+        <VBox styleClass="state-list-panel" minWidth="240" maxWidth="240" prefWidth="240">
+            <ScrollPane VBox.vgrow="ALWAYS" fitToWidth="true" styleClass="state-list-scroll">
+                <VBox fx:id="vendorListContainer" styleClass="state-list-container"/>
+            </ScrollPane>
+        </VBox>
+
+        <!-- Right: detail panel for selected vendor -->
+        <VBox fx:id="vendorDetailPane" HBox.hgrow="ALWAYS" styleClass="state-detail-panel"/>
+
+    </HBox>
+
 </VBox>

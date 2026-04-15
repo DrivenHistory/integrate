@@ -112,30 +112,34 @@ public class DashboardController {
     /** Replace stored placeholder with the configured school name for the given platform. */
     private static String platformDisplayToId(String display) {
         return switch (display) {
-            case "Arbiter"    -> "arbiter";
-            case "FanX"       -> "fanx";
-            case "MaxPreps"   -> "maxpreps";
-            case "Rank One"   -> "rankone";
-            case "FusionPoint"-> "fusionpoint";
-            case "Bound"      -> "bound";
-            case "Vantage"    -> "vantage";
-            case "Dragonfly"  -> "dragonfly";
-            case "HomeCampus" -> "homecampus";
-            default           -> display.toLowerCase();
+            case "Arbiter"      -> "arbiter";
+            case "ArbiterLive"  -> "arbiterlive";
+            case "FanX"         -> "fanx";
+            case "MaxPreps"     -> "maxpreps";
+            case "Rank One"     -> "rankone";
+            case "FusionPoint"  -> "fusionpoint";
+            case "Bound"        -> "bound";
+            case "Vantage"      -> "vantage";
+            case "Dragonfly"    -> "dragonfly";
+            case "HomeCampus"   -> "homecampus";
+            default             -> display.toLowerCase();
         };
     }
 
     private String display(String val, Game game) {
         if (val == null) return "";
         if (!val.startsWith("(")) return val;
-        // Value is a home-school placeholder — look up the school name from the connector config
+        // Global home school takes priority
+        String global = App.db.getSetting("home_school", "");
+        if (!global.isBlank()) return global;
+        // Fall back to per-vendor school name
         String sources = game.getSources();
         if (sources != null && !sources.isBlank()) {
             String platform = sources.split(",")[0].trim();
             String name = App.db.getSchoolName(platform);
             if (name != null && !name.isBlank()) return name;
         }
-        return val; // fall back to raw placeholder if not configured
+        return val;
     }
 
     private void loadGames() {

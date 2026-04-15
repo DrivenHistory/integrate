@@ -14,13 +14,10 @@ import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
-import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.*;
-import javafx.scene.layout.GridPane;
-import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.web.WebEngine;
 import javafx.scene.web.WebView;
 import javafx.stage.Stage;
@@ -29,36 +26,28 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class ConnectionsController {
 
-    // ── Vendor tab ────────────────────────────────────────────────────────────
+    // ── Vendor list ──────────────────────────────────────────────────────────
     @FXML private VBox  vendorListContainer;
     @FXML private VBox  vendorDetailPane;
     @FXML private Label summaryLabel;
     @FXML private Label summaryDot;
 
+    // ── State selector ───────────────────────────────────────────────────────
+    @FXML private javafx.scene.control.ComboBox<String> stateCombo;
+
     private PlatformConnector selectedConnector = null;
-
-    // ── Tab controls ──────────────────────────────────────────────────────────
-    @FXML private HBox vendorPane;
-    @FXML private HBox statePane;
-    @FXML private Button     btnTabVendors;
-    @FXML private Button     btnTabStates;
-
-    // ── State tab ─────────────────────────────────────────────────────────────
-    @FXML private VBox stateListContainer;
-    @FXML private VBox stateDetailPane;
-
-    private String selectedState = null;   // currently highlighted state row
+    private boolean stateAssocSelected = false;  // true when the state association row is active
 
     // ── Constants ─────────────────────────────────────────────────────────────
 
-    private static final List<String> ALL_STATES = List.of(
+    private static final String STATE_ASSOC_SENTINEL = "__state_assoc__";
+
+    static final List<String> ALL_STATES = List.of(
         "Alabama","Alaska","Arizona","Arkansas","California","Colorado",
         "Connecticut","Delaware","Florida","Georgia","Hawaii","Idaho",
         "Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana",
@@ -71,231 +60,139 @@ public class ConnectionsController {
         "West Virginia","Wisconsin","Wyoming"
     );
 
-    private static final List<String> ALL_SPORTS = List.of(
-        "Baseball","Basketball","Cross Country","Field Hockey","Football",
-        "Golf","Ice Hockey","Lacrosse","Soccer","Softball",
-        "Swimming & Diving","Tennis","Track & Field","Volleyball","Wrestling"
+    /** State association website URLs. */
+    private static final Map<String, String> STATE_URLS = Map.ofEntries(
+        Map.entry("Alabama",        "https://www.ahsaa.com"),
+        Map.entry("Alaska",         "https://www.asaa.org"),
+        Map.entry("Arizona",        "https://www.aiaonline.org"),
+        Map.entry("Arkansas",       "https://www.ahsaa.org"),
+        Map.entry("California",     "https://www.cifstate.org"),
+        Map.entry("Colorado",       "https://www.chsaanow.com"),
+        Map.entry("Connecticut",    "https://www.casciac.org"),
+        Map.entry("Delaware",       "https://education.delaware.gov/diaa/"),
+        Map.entry("Florida",        "https://www.fhsaa.com"),
+        Map.entry("Georgia",        "https://www.ghsa.net"),
+        Map.entry("Hawaii",         "https://hhsaa.org"),
+        Map.entry("Idaho",          "https://www.idhsaa.org"),
+        Map.entry("Illinois",       "https://www.ihsa.org"),
+        Map.entry("Indiana",        "https://www.ihsaa.org"),
+        Map.entry("Iowa",           "https://www.iahsaa.org"),
+        Map.entry("Kansas",         "https://www.kshsaa.org"),
+        Map.entry("Kentucky",       "https://www.khsaa.org"),
+        Map.entry("Louisiana",      "https://www.lhsaa.org"),
+        Map.entry("Maine",          "https://www.mpa.cc"),
+        Map.entry("Maryland",       "https://www.mpssaa.org"),
+        Map.entry("Massachusetts",  "https://www.miaa.net"),
+        Map.entry("Michigan",       "https://www.mhsaa.com"),
+        Map.entry("Minnesota",      "https://www.mshsl.org"),
+        Map.entry("Mississippi",    "https://www.misshsaa.com"),
+        Map.entry("Missouri",       "https://www.mshsaa.org"),
+        Map.entry("Montana",        "https://www.mhsa.org"),
+        Map.entry("Nebraska",       "https://www.nsaahome.org"),
+        Map.entry("Nevada",         "https://www.niaa.com"),
+        Map.entry("New Hampshire",  "https://www.nhiaa.org"),
+        Map.entry("New Jersey",     "https://www.njsiaa.org"),
+        Map.entry("New Mexico",     "https://www.nmact.org"),
+        Map.entry("New York",       "https://www.nysphsaa.org"),
+        Map.entry("North Carolina", "https://www.nchsaa.org"),
+        Map.entry("North Dakota",   "https://www.ndhsaa.com"),
+        Map.entry("Ohio",           "https://www.ohsaa.org"),
+        Map.entry("Oklahoma",       "https://www.ossaa.com"),
+        Map.entry("Oregon",         "https://www.osaa.org"),
+        Map.entry("Pennsylvania",   "https://www.piaa.org"),
+        Map.entry("Rhode Island",   "https://www.riil.org"),
+        Map.entry("South Carolina", "https://www.schsl.org"),
+        Map.entry("South Dakota",   "https://www.sdhsaa.com"),
+        Map.entry("Tennessee",      "https://www.tssaa.org"),
+        Map.entry("Texas",          "https://www.uiltexas.org"),
+        Map.entry("Utah",           "https://www.uhsaa.org"),
+        Map.entry("Vermont",        "https://www.vpaonline.org"),
+        Map.entry("Virginia",       "https://www.vhsl.org"),
+        Map.entry("Washington",     "https://www.wiaa.com"),
+        Map.entry("West Virginia",  "https://www.wvssac.org"),
+        Map.entry("Wisconsin",      "https://www.wiaawi.org"),
+        Map.entry("Wyoming",        "https://www.whsaa.org")
     );
 
-    private static final List<String> ALL_YEARS = List.of(
-        "22-23","23-24","24-25","25-26"
+    /** Primary data platform for each state association. */
+    private static final Map<String, String> STATE_PLATFORMS = Map.ofEntries(
+        Map.entry("Alabama",        "ScoreBird"),
+        Map.entry("Alaska",         "MaxPreps"),
+        Map.entry("Arizona",        "Own/Proprietary"),
+        Map.entry("Arkansas",       "DragonFly"),
+        Map.entry("California",     "MaxPreps"),
+        Map.entry("Colorado",       "MaxPreps"),
+        Map.entry("Connecticut",    "Own/Proprietary"),
+        Map.entry("Delaware",       "MaxPreps"),
+        Map.entry("Florida",        "MaxPreps"),
+        Map.entry("Georgia",        "MaxPreps"),
+        Map.entry("Hawaii",         "Own/Proprietary"),
+        Map.entry("Idaho",          "MaxPreps"),
+        Map.entry("Illinois",       "MaxPreps"),
+        Map.entry("Indiana",        "MaxPreps"),
+        Map.entry("Iowa",           "Bound"),
+        Map.entry("Kansas",         "Own/Proprietary"),
+        Map.entry("Kentucky",       "Own/Proprietary"),
+        Map.entry("Louisiana",      "Own/Proprietary"),
+        Map.entry("Maine",          "Own/Proprietary"),
+        Map.entry("Maryland",       "MaxPreps"),
+        Map.entry("Massachusetts",  "ArbiterSports"),
+        Map.entry("Michigan",       "Own/Proprietary"),
+        Map.entry("Minnesota",      "MaxPreps"),
+        Map.entry("Mississippi",    "MaxPreps"),
+        Map.entry("Missouri",       "Own/Proprietary"),
+        Map.entry("Montana",        "ArbiterSports"),
+        Map.entry("Nebraska",       "MaxPreps"),
+        Map.entry("Nevada",         "MaxPreps"),
+        Map.entry("New Hampshire",  "Own/Proprietary"),
+        Map.entry("New Jersey",     "rSchoolToday"),
+        Map.entry("New Mexico",     "MaxPreps"),
+        Map.entry("New York",       "MaxPreps"),
+        Map.entry("North Carolina", "DragonFly"),
+        Map.entry("North Dakota",   "Own/Proprietary"),
+        Map.entry("Ohio",           "MaxPreps"),
+        Map.entry("Oklahoma",       "ArbiterSports"),
+        Map.entry("Oregon",         "Own/Proprietary"),
+        Map.entry("Pennsylvania",   "MaxPreps"),
+        Map.entry("Rhode Island",   "MaxPreps"),
+        Map.entry("South Carolina", "MaxPreps"),
+        Map.entry("South Dakota",   "Bound"),
+        Map.entry("Tennessee",      "MaxPreps"),
+        Map.entry("Texas",          "MaxPreps"),
+        Map.entry("Utah",           "MaxPreps"),
+        Map.entry("Vermont",        "MaxPreps"),
+        Map.entry("Virginia",       "MaxPreps"),
+        Map.entry("Washington",     "rSchoolToday"),
+        Map.entry("West Virginia",  "MaxPreps"),
+        Map.entry("Wisconsin",      "Bound"),
+        Map.entry("Wyoming",        "MaxPreps")
+    );
+
+    /** Maps platform display names to internal connector IDs. */
+    private static final Map<String, String> PLATFORM_TO_CONNECTOR = Map.of(
+        "MaxPreps",       "maxpreps",
+        "ArbiterSports",  "arbiter",
+        "Bound",          "bound",
+        "DragonFly",      "dragonfly",
+        "rSchoolToday",   "rschooltoday",
+        "ScoreBird",      "scorebird"
     );
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     @FXML
     public void initialize() {
+        // Populate the state combo
+        stateCombo.getItems().addAll(ALL_STATES);
+        String savedState = App.db.getSetting("district_state", "");
+        if (!savedState.isBlank()) stateCombo.setValue(savedState);
+        stateCombo.setOnAction(e -> {
+            String val = stateCombo.getValue();
+            if (val != null) App.db.setSetting("district_state", val);
+            buildVendorList();
+        });
+
         buildVendorList();
-        buildStateList();
-    }
-
-    // ── Tab switching ─────────────────────────────────────────────────────────
-
-    @FXML
-    private void onTabVendors() {
-        vendorPane.setVisible(true);  vendorPane.setManaged(true);
-        statePane.setVisible(false);  statePane.setManaged(false);
-        btnTabVendors.getStyleClass().add("seg-btn-active");
-        btnTabStates.getStyleClass().remove("seg-btn-active");
-    }
-
-    @FXML
-    private void onTabStates() {
-        vendorPane.setVisible(false); vendorPane.setManaged(false);
-        statePane.setVisible(true);   statePane.setManaged(true);
-        btnTabStates.getStyleClass().add("seg-btn-active");
-        btnTabVendors.getStyleClass().remove("seg-btn-active");
-        // Auto-select first state if none selected
-        if (selectedState == null && !ALL_STATES.isEmpty()) {
-            selectState(ALL_STATES.get(0));
-        }
-    }
-
-    // ── State list ────────────────────────────────────────────────────────────
-
-    private void buildStateList() {
-        stateListContainer.getChildren().clear();
-        for (String state : ALL_STATES) {
-            HBox row = buildStateRow(state);
-            stateListContainer.getChildren().add(row);
-        }
-    }
-
-    private HBox buildStateRow(String state) {
-        HBox row = new HBox(10);
-        row.setAlignment(Pos.CENTER_LEFT);
-        row.getStyleClass().add("state-list-row");
-        row.setUserData(state);
-
-        // Enabled toggle dot
-        boolean enabled = isStateEnabled(state);
-        Label dot = new Label("●");
-        dot.getStyleClass().add(enabled ? "status-dot-connected" : "status-dot-disconnected");
-        dot.setStyle("-fx-font-size: 8px;");
-
-        Label name = new Label(state);
-        name.getStyleClass().add("state-row-name");
-        HBox.setHgrow(name, Priority.ALWAYS);
-
-        row.getChildren().addAll(dot, name);
-        row.setOnMouseClicked(e -> selectState(state));
-        return row;
-    }
-
-    private void selectState(String state) {
-        selectedState = state;
-        // Update highlight on all rows
-        stateListContainer.getChildren().forEach(node -> {
-            if (node instanceof HBox row) {
-                boolean active = state.equals(row.getUserData());
-                if (active) {
-                    if (!row.getStyleClass().contains("state-list-row-active"))
-                        row.getStyleClass().add("state-list-row-active");
-                } else {
-                    row.getStyleClass().remove("state-list-row-active");
-                }
-            }
-        });
-        buildStateDetail(state);
-    }
-
-    // ── State detail panel ────────────────────────────────────────────────────
-
-    private void buildStateDetail(String state) {
-        stateDetailPane.getChildren().clear();
-
-        Set<String> savedSports = loadStateSports(state);
-        Set<String> savedYears  = loadStateYears(state);
-
-        // ── Header ──
-        HBox header = new HBox();
-        header.getStyleClass().add("state-detail-header");
-        header.setAlignment(Pos.CENTER_LEFT);
-        Label title = new Label(state);
-        title.getStyleClass().add("state-detail-title");
-        header.getChildren().add(title);
-
-        // ── Years section ──
-        Label yearsHeading = new Label("SEASONS TO SYNC");
-        yearsHeading.getStyleClass().add("state-section-heading");
-
-        HBox yearsRow = new HBox(16);
-        yearsRow.setAlignment(Pos.CENTER_LEFT);
-        yearsRow.getStyleClass().add("state-years-row");
-
-        List<CheckBox> yearBoxes = new ArrayList<>();
-        for (String year : ALL_YEARS) {
-            CheckBox cb = new CheckBox(year);
-            cb.getStyleClass().add("state-checkbox");
-            cb.setSelected(savedYears.contains(year));
-            yearBoxes.add(cb);
-            yearsRow.getChildren().add(cb);
-        }
-
-        // ── Sports section ──
-        Label sportsHeading = new Label("SPORTS TO SYNC");
-        sportsHeading.getStyleClass().add("state-section-heading");
-
-        // 3-column grid of sport checkboxes
-        GridPane sportsGrid = new GridPane();
-        sportsGrid.setHgap(16);
-        sportsGrid.setVgap(10);
-        sportsGrid.getStyleClass().add("state-sports-grid");
-
-        List<CheckBox> sportBoxes = new ArrayList<>();
-        for (int i = 0; i < ALL_SPORTS.size(); i++) {
-            String sport = ALL_SPORTS.get(i);
-            CheckBox cb = new CheckBox(sport);
-            cb.getStyleClass().add("state-checkbox");
-            cb.setSelected(savedSports.contains(sport));
-            sportBoxes.add(cb);
-            sportsGrid.add(cb, i % 3, i / 3);
-        }
-
-        // Select All / Clear links
-        HBox sportLinks = new HBox(16);
-        sportLinks.setAlignment(Pos.CENTER_LEFT);
-        Button selectAll = new Button("Select all");
-        selectAll.getStyleClass().add("btn-link");
-        selectAll.setOnAction(e -> sportBoxes.forEach(cb -> cb.setSelected(true)));
-        Button clearAll = new Button("Clear all");
-        clearAll.getStyleClass().add("btn-link");
-        clearAll.setOnAction(e -> sportBoxes.forEach(cb -> cb.setSelected(false)));
-        sportLinks.getChildren().addAll(selectAll, clearAll);
-
-        // ── Save button ──
-        HBox footer = new HBox();
-        footer.getStyleClass().add("state-detail-footer");
-        footer.setAlignment(Pos.CENTER_RIGHT);
-        Button save = new Button("Save");
-        save.getStyleClass().add("btn-primary");
-        save.setOnAction(e -> {
-            Set<String> sports = new LinkedHashSet<>();
-            sportBoxes.stream().filter(CheckBox::isSelected)
-                      .forEach(cb -> sports.add(cb.getText()));
-            Set<String> years = new LinkedHashSet<>();
-            yearBoxes.stream().filter(CheckBox::isSelected)
-                     .forEach(cb -> years.add(cb.getText()));
-
-            saveStateSports(state, sports);
-            saveStateYears(state, years);
-
-            // Refresh the dot colour in the list
-            boolean active = !sports.isEmpty() && !years.isEmpty();
-            stateListContainer.getChildren().forEach(node -> {
-                if (node instanceof HBox row && state.equals(row.getUserData())) {
-                    Label dot = (Label) row.getChildren().get(0);
-                    dot.getStyleClass().setAll(
-                        active ? "status-dot-connected" : "status-dot-disconnected");
-                }
-            });
-        });
-        footer.getChildren().add(save);
-
-        // ── Assemble ──
-        VBox body = new VBox(28);
-        body.getStyleClass().add("state-detail-body");
-        VBox.setVgrow(body, Priority.ALWAYS);
-        body.getChildren().addAll(
-            yearsHeading, yearsRow,
-            sportsHeading, sportLinks, sportsGrid
-        );
-
-        stateDetailPane.getChildren().addAll(header, body, footer);
-    }
-
-    // ── State config persistence (settings table) ─────────────────────────────
-
-    private static String stateKey(String state) {
-        return "state_" + state.toLowerCase().replace(" ", "_");
-    }
-
-    private boolean isStateEnabled(String state) {
-        return !loadStateSports(state).isEmpty() && !loadStateYears(state).isEmpty();
-    }
-
-    private Set<String> loadStateSports(String state) {
-        String raw = App.db.getSetting(stateKey(state) + "_sports", "");
-        Set<String> result = new LinkedHashSet<>();
-        if (!raw.isBlank())
-            for (String s : raw.split(",")) if (!s.isBlank()) result.add(s.trim());
-        return result;
-    }
-
-    private Set<String> loadStateYears(String state) {
-        String raw = App.db.getSetting(stateKey(state) + "_years", "");
-        Set<String> result = new LinkedHashSet<>();
-        if (!raw.isBlank())
-            for (String y : raw.split(",")) if (!y.isBlank()) result.add(y.trim());
-        return result;
-    }
-
-    private void saveStateSports(String state, Set<String> sports) {
-        App.db.setSetting(stateKey(state) + "_sports", String.join(",", sports));
-    }
-
-    private void saveStateYears(String state, Set<String> years) {
-        App.db.setSetting(stateKey(state) + "_years", String.join(",", years));
     }
 
     // ── Vendor list (left panel) ──────────────────────────────────────────────
@@ -305,6 +202,12 @@ public class ConnectionsController {
         if (App.mainController != null) App.mainController.refreshPlatformStatus();
         vendorListContainer.getChildren().clear();
 
+        // State association row (top of list when a state is selected)
+        String selectedState = stateCombo.getValue();
+        if (selectedState != null && !selectedState.isBlank()) {
+            vendorListContainer.getChildren().add(buildStateAssocRow(selectedState));
+        }
+
         List<PlatformConnector> connectors = sortedConnectors();
 
         for (PlatformConnector connector : connectors) {
@@ -312,9 +215,13 @@ public class ConnectionsController {
             vendorListContainer.getChildren().add(row);
         }
 
-        // Re-select or auto-select first non-coming-soon connector
-        if (selectedConnector != null) {
+        // Re-select or auto-select
+        if (stateAssocSelected && selectedState != null) {
+            selectStateAssoc(selectedState);
+        } else if (selectedConnector != null) {
             selectConnector(selectedConnector);
+        } else if (selectedState != null) {
+            selectStateAssoc(selectedState);
         } else {
             connectors.stream().filter(c -> !isComingSoon(c.getPlatformName()))
                 .findFirst().ifPresent(this::selectConnector);
@@ -322,6 +229,134 @@ public class ConnectionsController {
 
         updateSummary(connectors);
         normalizeSyncOrders(connectors);
+    }
+
+    // ── State association row & detail ────────────────────────────────────────
+
+    private HBox buildStateAssocRow(String state) {
+        String platform = STATE_PLATFORMS.getOrDefault(state, "Unknown");
+
+        HBox row = new HBox(10);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.getStyleClass().add("state-list-row");
+        row.setUserData(STATE_ASSOC_SENTINEL);
+
+        Label dot = new Label("●");
+        dot.setStyle("-fx-font-size: 8px;");
+        String connectorId = PLATFORM_TO_CONNECTOR.get(platform);
+        boolean hasConnector = connectorId != null
+            && Arrays.stream(App.syncEngine.getConnectors())
+                .anyMatch(c -> connectorId.equals(c.getPlatformName()));
+        dot.getStyleClass().add(hasConnector ? "status-dot-connected" : "status-dot-unavailable");
+
+        VBox nameBox = new VBox(1);
+        HBox.setHgrow(nameBox, Priority.ALWAYS);
+        Label nameLbl = new Label("State Association - " + state);
+        nameLbl.getStyleClass().add("state-row-name");
+        Label descLbl = new Label(platform);
+        descLbl.getStyleClass().add("vendor-row-desc");
+        nameBox.getChildren().addAll(nameLbl, descLbl);
+
+        row.getChildren().addAll(dot, nameBox);
+        row.setOnMouseClicked(e -> selectStateAssoc(state));
+        return row;
+    }
+
+    private void selectStateAssoc(String state) {
+        stateAssocSelected = true;
+        selectedConnector = null;
+
+        // Highlight state assoc row, deselect all others
+        vendorListContainer.getChildren().forEach(node -> {
+            if (node instanceof HBox row) {
+                boolean active = STATE_ASSOC_SENTINEL.equals(row.getUserData());
+                if (active) {
+                    if (!row.getStyleClass().contains("state-list-row-active"))
+                        row.getStyleClass().add("state-list-row-active");
+                } else {
+                    row.getStyleClass().remove("state-list-row-active");
+                }
+            }
+        });
+
+        buildStateAssocDetail(state);
+    }
+
+    private void buildStateAssocDetail(String state) {
+        vendorDetailPane.getChildren().clear();
+
+        String stateUrl  = STATE_URLS.get(state);
+        String platform  = STATE_PLATFORMS.getOrDefault(state, "Unknown");
+        String connectorId = PLATFORM_TO_CONNECTOR.get(platform);
+        boolean hasConnector = connectorId != null
+            && Arrays.stream(App.syncEngine.getConnectors())
+                .anyMatch(c -> connectorId.equals(c.getPlatformName()) && !isComingSoon(c.getPlatformName()));
+
+        // ── Header ──
+        HBox header = new HBox(12);
+        header.setAlignment(Pos.CENTER_LEFT);
+        header.getStyleClass().add("state-detail-header");
+
+        VBox titleBox = new VBox(3);
+        HBox.setHgrow(titleBox, Priority.ALWAYS);
+        Label titleLbl = new Label("State Association - " + state);
+        titleLbl.getStyleClass().add("state-detail-title");
+
+        if (stateUrl != null) {
+            javafx.scene.control.Hyperlink urlLink = new javafx.scene.control.Hyperlink(stateUrl);
+            urlLink.getStyleClass().add("card-platform-desc");
+            urlLink.setOnAction(e -> {
+                try { java.awt.Desktop.getDesktop().browse(new java.net.URI(stateUrl)); }
+                catch (Exception ex) { /* ignore */ }
+            });
+            titleBox.getChildren().addAll(titleLbl, urlLink);
+        } else {
+            titleBox.getChildren().add(titleLbl);
+        }
+
+        header.getChildren().add(titleBox);
+
+        // ── Body ──
+        VBox body = new VBox(20);
+        body.getStyleClass().add("state-detail-body");
+        VBox.setVgrow(body, Priority.ALWAYS);
+
+        // SOURCE row
+        HBox sourceRow = new HBox(10);
+        sourceRow.setAlignment(Pos.CENTER_LEFT);
+        Label sourceLbl = new Label("SOURCE");
+        sourceLbl.getStyleClass().add("meta-label");
+        sourceLbl.setMinWidth(90);
+        Label sourceVal = new Label(platform);
+        sourceVal.setStyle(hasConnector
+            ? "-fx-text-fill: #6EE7B7; -fx-font-size: 13px; -fx-font-weight: bold;"
+            : "-fx-text-fill: #9CA3AF; -fx-font-size: 13px;");
+        sourceRow.getChildren().addAll(sourceLbl, sourceVal);
+
+        // CONNECTOR row
+        HBox connectorRow = new HBox(10);
+        connectorRow.setAlignment(Pos.CENTER_LEFT);
+        Label connLbl = new Label("CONNECTOR");
+        connLbl.getStyleClass().add("meta-label");
+        connLbl.setMinWidth(90);
+
+        if (hasConnector) {
+            Label connVal = new Label(getPlatformDisplayName(connectorId) + "  ✓ available");
+            connVal.setStyle("-fx-text-fill: #6EE7B7; -fx-font-size: 12px;");
+            connectorRow.getChildren().addAll(connLbl, connVal);
+        } else if ("Own/Proprietary".equals(platform)) {
+            Label connVal = new Label("Custom — state runs its own platform");
+            connVal.setStyle("-fx-text-fill: #6B7280; -fx-font-size: 12px;");
+            connectorRow.getChildren().addAll(connLbl, connVal);
+        } else {
+            Label connVal = new Label("No connector yet");
+            connVal.setStyle("-fx-text-fill: #6B7280; -fx-font-size: 12px;");
+            connectorRow.getChildren().addAll(connLbl, connVal);
+        }
+
+        body.getChildren().addAll(sourceRow, connectorRow);
+
+        vendorDetailPane.getChildren().addAll(header, body);
     }
 
     private HBox buildVendorRow(PlatformConnector connector) {
@@ -370,6 +405,7 @@ public class ConnectionsController {
     }
 
     private void selectConnector(PlatformConnector connector) {
+        stateAssocSelected = false;
         selectedConnector = connector;
         String platform = connector.getPlatformName();
 
@@ -422,22 +458,6 @@ public class ConnectionsController {
         VBox.setVgrow(body, Priority.ALWAYS);
 
         if (!comingSoon) {
-            // School name
-            HBox schoolRow = new HBox(10);
-            schoolRow.setAlignment(Pos.CENTER_LEFT);
-            Label schoolLbl = new Label("SCHOOL");
-            schoolLbl.getStyleClass().add("meta-label");
-            schoolLbl.setMinWidth(90);
-            TextField schoolField = new TextField();
-            schoolField.setPromptText("Your school name (e.g. Mercer Island)");
-            schoolField.getStyleClass().add("url-field");
-            HBox.setHgrow(schoolField, Priority.ALWAYS);
-            String existingSchool = config.getSchoolName();
-            if (existingSchool != null && !existingSchool.isBlank()) schoolField.setText(existingSchool);
-            schoolField.textProperty().addListener((obs, old, val) -> App.db.updateSchoolName(platform, val.trim()));
-            schoolRow.getChildren().addAll(schoolLbl, schoolField);
-            body.getChildren().add(schoolRow);
-
             // URL / ID field
             if (needsUrlConfig(platform)) {
                 HBox urlRow = new HBox(10);
@@ -1107,7 +1127,7 @@ public class ConnectionsController {
 
     private boolean needsUrlConfig(String platform) {
         return switch (platform) {
-            case "homecampus", "maxpreps", "fanx" -> true;
+            case "homecampus", "maxpreps", "fanx", "arbiterlive" -> true;
             default -> false;
         };
     }
@@ -1115,6 +1135,7 @@ public class ConnectionsController {
     private String getPlatformDisplayName(String platform) {
         return switch (platform) {
             case "arbiter"     -> "Arbiter";
+            case "arbiterlive" -> "ArbiterLive";
             case "fanx"        -> "FanX";
             case "maxpreps"    -> "MaxPreps";
             case "rankone"     -> "Rank One";
@@ -1130,6 +1151,7 @@ public class ConnectionsController {
     private String getPlatformDescription(String platform) {
         return switch (platform) {
             case "arbiter"     -> "Game scheduling & officials";
+            case "arbiterlive" -> "Public schedules & scores — no login required";
             case "fanx"        -> "Fan engagement & ticketing";
             case "maxpreps"    -> "Game results & scores";
             case "rankone"     -> "Athletic eligibility & compliance";

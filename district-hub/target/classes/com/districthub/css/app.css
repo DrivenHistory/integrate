@@ -150,3 +150,89 @@
 .log-success .table-cell { -fx-text-fill: #22C55E; }
 .log-warning .table-cell { -fx-text-fill: #F59E0B; }
 .log-error .table-cell { -fx-text-fill: #EF4444; }
+
+/* ── State tab ──────────────────────────────────────────────────────────── */
+.state-tab-root { -fx-background-color: #0F1117; }
+
+/* Left panel — state list */
+.state-list-panel {
+    -fx-background-color: #141722;
+    -fx-border-color: transparent #1E2130 transparent transparent;
+    -fx-border-width: 0 1 0 0;
+}
+.state-list-header {
+    -fx-padding: 16 16 12 16;
+    -fx-border-color: transparent transparent #1E2130 transparent;
+    -fx-border-width: 0 0 1 0;
+}
+.state-panel-title {
+    -fx-text-fill: #F1F5F9;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+}
+.state-list-scroll { -fx-background-color: transparent; -fx-border-color: transparent; }
+.state-list-scroll .viewport { -fx-background-color: transparent; }
+.state-list-container { -fx-padding: 6 0; -fx-background-color: transparent; }
+
+.state-list-row {
+    -fx-padding: 9 16;
+    -fx-cursor: hand;
+    -fx-background-color: transparent;
+}
+.state-list-row:hover { -fx-background-color: #1A1D2E; }
+.state-list-row-active { -fx-background-color: #1E2D4A !important; }
+
+.state-row-name {
+    -fx-text-fill: #CBD5E1;
+    -fx-font-size: 13px;
+}
+.state-list-row-active .state-row-name { -fx-text-fill: #F1F5F9; -fx-font-weight: bold; }
+.vendor-row-desc { -fx-text-fill: #4A5568; -fx-font-size: 11px; }
+
+/* Right panel — detail */
+.state-detail-panel {
+    -fx-background-color: #0F1117;
+}
+.state-detail-header {
+    -fx-padding: 24 32 20 32;
+    -fx-border-color: transparent transparent #1E2130 transparent;
+    -fx-border-width: 0 0 1 0;
+    -fx-background-color: #141722;
+}
+.state-detail-title {
+    -fx-text-fill: #F1F5F9;
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+}
+.state-detail-body { -fx-padding: 28 32; }
+.state-detail-footer {
+    -fx-padding: 16 32;
+    -fx-border-color: #1E2130 transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+    -fx-background-color: #141722;
+}
+
+.state-section-heading {
+    -fx-text-fill: #4A5568;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-padding: 0 0 2 0;
+}
+.state-years-row { -fx-padding: 0 0 4 0; }
+.state-sports-grid { -fx-padding: 2 0 0 0; }
+
+.state-checkbox {
+    -fx-text-fill: #CBD5E1;
+    -fx-font-size: 13px;
+}
+.state-checkbox .box {
+    -fx-background-color: #1E2130;
+    -fx-border-color: #2A2F42;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+}
+.state-checkbox:selected .box {
+    -fx-background-color: #4F6BED;
+    -fx-border-color: #4F6BED;
+}
+.state-checkbox:selected .mark { -fx-background-color: white; }

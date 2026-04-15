@@ -15,6 +15,13 @@
     <HBox VBox.vgrow="ALWAYS" spacing="20" styleClass="settings-body">
         <!-- Left column -->
         <VBox spacing="20" prefWidth="480">
+            <!-- Home School -->
+            <VBox styleClass="card" spacing="14">
+                <Label text="Home School" styleClass="card-title"/>
+                <Label text="Your school's name as it should appear across all platforms and reports." styleClass="card-desc" wrapText="true"/>
+                <TextField fx:id="homeSchoolField" promptText="e.g. Mercer Island High School" styleClass="url-field"/>
+            </VBox>
+
             <!-- Sync Schedule -->
             <VBox styleClass="card" spacing="14">
                 <Label text="Sync Schedule" styleClass="card-title"/>

@@ -139,15 +139,16 @@ public class DatabaseManager {
     private void seedPlatforms() {
         // platform, default sync_order (0 = not set; active platforms get a default order)
         Object[][] platforms = {
-            {"arbiter",     1},
-            {"fanx",        2},
-            {"maxpreps",    3},
-            {"rankone",     0},
-            {"fusionpoint", 0},
-            {"bound",       0},
-            {"vantage",     0},
-            {"dragonfly",   0},
-            {"homecampus",  0}
+            {"arbiter",      1},
+            {"arbiterlive",  2},
+            {"fanx",         3},
+            {"maxpreps",     4},
+            {"rankone",      0},
+            {"fusionpoint",  0},
+            {"bound",        0},
+            {"vantage",      0},
+            {"dragonfly",    0},
+            {"homecampus",   0}
         };
         String sql = "INSERT OR IGNORE INTO platform_config (platform, access_mode, confidence, sync_order) VALUES (?, 'READ', 'unknown', ?)";
         try (PreparedStatement ps = connection.prepareStatement(sql)) {

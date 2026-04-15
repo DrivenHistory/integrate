@@ -1,25 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?import javafx.scene.layout.*?>
 <?import javafx.scene.control.*?>
+<?import javafx.collections.FXCollections?>
+<?import java.lang.String?>
 <VBox xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="com.districthub.ui.ConnectionsController"
       styleClass="main-content">
 
     <!-- ── Header ──────────────────────────────────────────────────────────── -->
     <HBox styleClass="content-header" alignment="CENTER_LEFT" spacing="12">
-        <Label text="Platform Connections" styleClass="content-title"/>
-        <Region HBox.hgrow="ALWAYS"/>
-
-        <!-- Segmented tab control -->
-        <HBox fx:id="tabToggle" styleClass="segmented-control" alignment="CENTER" spacing="2">
-            <Button fx:id="btnTabVendors" text="Vendors"
-                    styleClass="seg-btn,seg-btn-active"
-                    onAction="#onTabVendors"/>
-            <Button fx:id="btnTabStates" text="States"
-                    styleClass="seg-btn"
-                    onAction="#onTabStates"/>
-        </HBox>
-        <Region prefWidth="16"/>
+        <VBox spacing="6" HBox.hgrow="ALWAYS">
+            <Label text="Platform Connections" styleClass="content-title"/>
+            <HBox alignment="CENTER_LEFT" spacing="8">
+                <Label text="STATE" styleClass="meta-label"/>
+                <ComboBox fx:id="stateCombo" promptText="Select state..." styleClass="filter-combo"/>
+            </HBox>
+        </VBox>
 
         <HBox fx:id="summaryPill" styleClass="sync-status-pill" spacing="6" alignment="CENTER">
             <Label fx:id="summaryDot" text="●" styleClass="status-dot-connected"/>
@@ -27,14 +23,11 @@
         </HBox>
     </HBox>
 
-    <!-- ── Vendors tab ──────────────────────────────────────────────────────── -->
-    <HBox fx:id="vendorPane" VBox.vgrow="ALWAYS" styleClass="state-tab-root">
+    <!-- ── Connector list ──────────────────────────────────────────────────── -->
+    <HBox VBox.vgrow="ALWAYS" styleClass="state-tab-root">
 
         <!-- Left: vendor list -->
         <VBox styleClass="state-list-panel" minWidth="240" maxWidth="240" prefWidth="240">
-            <HBox styleClass="state-list-header" alignment="CENTER_LEFT">
-                <Label text="Vendors" styleClass="state-panel-title"/>
-            </HBox>
             <ScrollPane VBox.vgrow="ALWAYS" fitToWidth="true" styleClass="state-list-scroll">
                 <VBox fx:id="vendorListContainer" styleClass="state-list-container"/>
             </ScrollPane>
@@ -42,24 +35,6 @@
 
         <!-- Right: detail panel for selected vendor -->
         <VBox fx:id="vendorDetailPane" HBox.hgrow="ALWAYS" styleClass="state-detail-panel"/>
-
-    </HBox>
-
-    <!-- ── States tab ──────────────────────────────────────────────────────── -->
-    <HBox fx:id="statePane" VBox.vgrow="ALWAYS" visible="false" managed="false" styleClass="state-tab-root">
-
-        <!-- Left: state list -->
-        <VBox styleClass="state-list-panel" minWidth="220" maxWidth="220" prefWidth="220">
-            <HBox styleClass="state-list-header" alignment="CENTER_LEFT">
-                <Label text="States" styleClass="state-panel-title"/>
-            </HBox>
-            <ScrollPane VBox.vgrow="ALWAYS" fitToWidth="true" styleClass="state-list-scroll">
-                <VBox fx:id="stateListContainer" styleClass="state-list-container"/>
-            </ScrollPane>
-        </VBox>
-
-        <!-- Right: detail panel for selected state -->
-        <VBox fx:id="stateDetailPane" HBox.hgrow="ALWAYS" styleClass="state-detail-panel"/>
 
     </HBox>
 

@@ -2,20 +2,22 @@ package com.districthub.ui;
 
 import com.districthub.App;
 import com.districthub.connectors.PlatformConnector;
+import com.districthub.model.PlatformConfig;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.scene.web.WebView;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 
 public class MainController {
 
@@ -26,33 +28,13 @@ public class MainController {
     @FXML private HBox navSyncLog;
     @FXML private HBox navSettings;
     @FXML private HBox navAbout;
-    @FXML private Label dotArbiter;
-    @FXML private Label dotFanX;
-    @FXML private Label dotRankOne;
-    @FXML private Label dotFusion;
-    @FXML private Label dotBound;
-    @FXML private Label dotVantage;
-    @FXML private Label dotDragonfly;
-    @FXML private Label dotHomeCampus;
-    @FXML private Label dotMaxPreps;
+    @FXML private VBox platformStatusContainer;
 
     private List<HBox> allNavItems;
-    private Map<String, Label> platformDots;
 
     @FXML
     public void initialize() {
         allNavItems = List.of(navSchedule, navScores, navConnections, navSyncLog, navSettings, navAbout);
-        platformDots = Map.of(
-            "arbiter",     dotArbiter,
-            "fanx",        dotFanX,
-            "maxpreps",    dotMaxPreps,
-            "rankone",     dotRankOne,
-            "fusionpoint", dotFusion,
-            "bound",       dotBound,
-            "vantage",     dotVantage,
-            "dragonfly",   dotDragonfly,
-            "homecampus",  dotHomeCampus
-        );
         loadView("dashboard.fxml");
         setActiveNav(navSchedule);
         refreshPlatformStatus();
@@ -116,13 +98,21 @@ public class MainController {
     }
 
     public void refreshPlatformStatus() {
+        Platform.runLater(this::rebuildPlatformList);
         Task<Void> task = new Task<>() {
-            @Override
-            protected Void call() {
+            @Override protected Void call() {
                 for (PlatformConnector c : App.syncEngine.getConnectors()) {
-                    boolean connected = c.isConnected();
-                    String name = c.getPlatformName();
-                    Platform.runLater(() -> updatePlatformDot(name, connected));
+                    if (!isVendorConfigured(c.getPlatformName())) continue;
+                    boolean ok = c.isConnected();
+                    String id = c.getPlatformName();
+                    Platform.runLater(() -> platformStatusContainer.getChildren().stream()
+                        .filter(n -> id.equals(n.getUserData()))
+                        .findFirst().ifPresent(n -> {
+                            Label dot = (Label) ((HBox) n).getChildren().get(0);
+                            dot.getStyleClass().removeAll("status-dot-unknown",
+                                "status-dot-connected", "status-dot-disconnected");
+                            dot.getStyleClass().add(ok ? "status-dot-connected" : "status-dot-disconnected");
+                        }));
                 }
                 return null;
             }
@@ -132,21 +122,61 @@ public class MainController {
         t.start();
     }
 
-    private void updatePlatformDot(String platform, boolean connected) {
-        Label dot = platformDots.get(platform);
-        if (dot != null) {
-            dot.getStyleClass().removeAll("status-dot-connected", "status-dot-disconnected",
-                "status-dot-unknown", "status-dot-unavailable");
-            String styleClass = isComingSoon(platform) ? "status-dot-unavailable"
-                : connected ? "status-dot-connected" : "status-dot-disconnected";
-            dot.getStyleClass().add(styleClass);
+    private void rebuildPlatformList() {
+        platformStatusContainer.getChildren().clear();
+        List<PlatformConfig> configs = App.db.getAllPlatformConfigs();
+        for (PlatformConfig cfg : configs) {
+            String p = cfg.getPlatform();
+            if (!isVendorConfigured(p)) continue;
+            HBox row = makeSidebarRow(p, vendorDisplayName(p), "status-dot-unknown");
+            platformStatusContainer.getChildren().add(row);
+        }
+        for (String state : ConnectionsController.ALL_STATES) {
+            if (!isStateConnected(state)) continue;
+            HBox row = makeSidebarRow("state_" + state, state, "status-dot-connected");
+            platformStatusContainer.getChildren().add(row);
         }
     }
 
-    private boolean isComingSoon(String platform) {
+    private HBox makeSidebarRow(Object userData, String label, String dotStyle) {
+        HBox row = new HBox(8);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.getStyleClass().add("platform-status-row");
+        row.setUserData(userData);
+        Label dot = new Label("●");
+        dot.getStyleClass().add(dotStyle);
+        Label name = new Label(label);
+        name.getStyleClass().add("platform-name");
+        row.getChildren().addAll(dot, name);
+        return row;
+    }
+
+    private boolean isVendorConfigured(String platform) {
+        if (App.sessionStore.hasCookies(platform)) return true;
+        return App.db.getAllPlatformConfigs().stream()
+            .filter(c -> platform.equals(c.getPlatform()))
+            .findFirst()
+            .map(c -> c.getEndpoint() != null && !c.getEndpoint().isBlank())
+            .orElse(false);
+    }
+
+    private boolean isStateConnected(String state) {
+        String key = "state_" + state.toLowerCase().replace(" ", "_") + "_connected";
+        return "true".equals(App.db.getSetting(key, "false"));
+    }
+
+    private String vendorDisplayName(String platform) {
         return switch (platform) {
-            case "fusionpoint", "vantage", "homecampus", "rankone", "bound", "dragonfly" -> true;
-            default -> false;
+            case "fanx"        -> "FanX";
+            case "arbiter"     -> "Arbiter";
+            case "maxpreps"    -> "MaxPreps";
+            case "rankone"     -> "Rank One";
+            case "fusionpoint" -> "FusionPoint";
+            case "bound"       -> "Bound";
+            case "vantage"     -> "Vantage / League Minder";
+            case "dragonfly"   -> "Dragonfly";
+            case "homecampus"  -> "HomeCampus";
+            default            -> platform;
         };
     }
 }
