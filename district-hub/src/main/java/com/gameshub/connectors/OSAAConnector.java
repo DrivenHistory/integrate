@@ -345,7 +345,7 @@ public class OSAAConnector implements PlatformConnector {
 
                 Elements contests = selectContests(panel);
                 for (Element contest : contests) {
-                    Map<String, String> game = parseContestElement(contest, sport, level, ourSchool, teamId);
+                    Map<String, String> game = parseContestElement(contest, sport, level, true, ourSchool, teamId);
                     if (game != null) games.add(game);
                 }
             }
@@ -362,7 +362,7 @@ public class OSAAConnector implements PlatformConnector {
 
             Elements contests = selectContests(doc);
             for (Element contest : contests) {
-                Map<String, String> game = parseContestElement(contest, sport, level, ourSchool, teamId);
+                Map<String, String> game = parseContestElement(contest, sport, level, false, ourSchool, teamId);
                 if (game != null) games.add(game);
             }
         }
@@ -417,6 +417,7 @@ public class OSAAConnector implements PlatformConnector {
     }
 
     private Map<String, String> parseContestElement(Element el, String sport, String level,
+                                                     boolean levelFromTab,
                                                      String ourSchool, String teamId) {
         Map<String, String> game = new LinkedHashMap<>();
         game.put("sport", sport);
@@ -436,11 +437,17 @@ public class OSAAConnector implements PlatformConnector {
         String opponent = parsed.get("opponent");
         if (opponent == null || opponent.isBlank()) return null;
 
-        // Level: [JV], [JV2], [FR] in the contest text override the discovery-label level.
-        // This is how OSAA encodes which sub-program each game belongs to on a program page.
-        String effectiveLevel = parsed.containsKey("levelOverride")
-            ? parsed.get("levelOverride")
-            : level;
+        // Level: when the level came from a tab panel it's authoritative — bracket tags
+        // like [JV2] or [FR] describe the *opponent's* level, not this game's level.
+        // Only use bracket tags as overrides when there are no tabs (single-level pages).
+        String effectiveLevel;
+        if (levelFromTab) {
+            effectiveLevel = level;
+        } else {
+            effectiveLevel = parsed.containsKey("levelOverride")
+                ? parsed.get("levelOverride")
+                : level;
+        }
         game.put("level", effectiveLevel);
 
         // Home/Away: our team is always the team whose page we fetched
