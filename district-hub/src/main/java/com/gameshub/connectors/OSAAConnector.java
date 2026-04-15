@@ -114,7 +114,7 @@ public class OSAAConnector implements PlatformConnector {
     public OSAAConnector(SessionStore sessionStore, DatabaseManager db) {
         this.db = db;
         this.httpClient = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NORMAL)
+            .followRedirects(HttpClient.Redirect.ALWAYS)
             .build();
     }
 
@@ -790,8 +790,8 @@ public class OSAAConnector implements PlatformConnector {
                 .build();
             HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
 
-            if (resp.statusCode() == 404) {
-                return null; // expected for sports without teams in a given year — silent
+            if (resp.statusCode() == 404 || resp.statusCode() == 302) {
+                return null; // 404 = no page; 302 = sport/year redirect we couldn't follow — both silent
             }
             if (resp.statusCode() == 429) {
                 db.insertSyncLog("WARNING", PLATFORM,
