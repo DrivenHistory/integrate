@@ -327,35 +327,93 @@ public class OSAAConnector implements PlatformConnector {
         } else {
             sport = extractSportFromTeamPage(doc);
         }
-
-        // Level: OSAA team pages have nav tabs (Varsity / Junior Varsity / Freshman).
-        // The active tab is the most reliable level indicator — use it first, then
-        // fall back to discovery label, then page content.
-        String level = extractLevelFromTabs(doc);
-        if (level == null) {
-            if (discoveryLabel != null && !discoveryLabel.isBlank()) {
-                level = extractLevelFromLabel(discoveryLabel);
-            } else {
-                level = extractLevelFromTeamPage(doc);
-            }
-        }
         String ourSchool = extractSchoolNameFromTeamPage(doc);
 
-        // OSAA contest containers — try several selector strategies
-        Elements contests = doc.select(".contest[data-contest]");
-        if (contests.isEmpty()) contests = doc.select("tr.contest, .game-row, .schedule-row");
-        if (contests.isEmpty()) contests = doc.select("table.schedule tbody tr, table.games tbody tr");
-        if (contests.isEmpty()) contests = doc.select("table tbody tr");
+        // OSAA team pages use jQuery UI tabs when multiple levels exist on one page
+        // (e.g. Varsity | Junior Varsity | Freshman). Each tab panel (div#tabs-V,
+        // div#tabs-JV, div#tabs-FR) contains that level's schedule rows.
+        // Build a map of panel-id → level-label from the tab nav.
+        Map<String, String> tabLevels = extractTabPanelLevels(doc);
 
-        for (Element contest : contests) {
-            Map<String, String> game = parseContestElement(contest, sport, level, ourSchool, teamId);
-            if (game != null) games.add(game);
+        if (!tabLevels.isEmpty()) {
+            // Parse each tab panel separately with its own level
+            for (Map.Entry<String, String> tab : tabLevels.entrySet()) {
+                String panelId = tab.getKey();   // e.g. "tabs-V"
+                String level   = tab.getValue();  // e.g. "Varsity"
+                Element panel  = doc.getElementById(panelId);
+                if (panel == null) continue;
+
+                Elements contests = selectContests(panel);
+                for (Element contest : contests) {
+                    Map<String, String> game = parseContestElement(contest, sport, level, ourSchool, teamId);
+                    if (game != null) games.add(game);
+                }
+            }
+        } else {
+            // No tabs — single-level page; determine level from label or page content
+            String level = extractLevelFromTabs(doc);
+            if (level == null) {
+                if (discoveryLabel != null && !discoveryLabel.isBlank()) {
+                    level = extractLevelFromLabel(discoveryLabel);
+                } else {
+                    level = extractLevelFromTeamPage(doc);
+                }
+            }
+
+            Elements contests = selectContests(doc);
+            for (Element contest : contests) {
+                Map<String, String> game = parseContestElement(contest, sport, level, ourSchool, teamId);
+                if (game != null) games.add(game);
+            }
         }
 
-        // Note: no freeform fallback — a page that produces no structured rows should yield
-        // zero records rather than phantom records parsed from nav/footer/challenge page text.
-
         return games;
+    }
+
+    /** Selects contest rows from a container using multiple selector strategies. */
+    private Elements selectContests(Element container) {
+        Elements contests = container.select(".contest[data-contest]");
+        if (contests.isEmpty()) contests = container.select("tr.contest, .game-row, .schedule-row");
+        if (contests.isEmpty()) contests = container.select("table.schedule tbody tr, table.games tbody tr");
+        if (contests.isEmpty()) contests = container.select("table tbody tr");
+        return contests;
+    }
+
+    /**
+     * Extracts tab panel ID → level label from OSAA's jQuery UI tab navigation.
+     * E.g. { "tabs-V" → "Varsity", "tabs-JV" → "JV", "tabs-FR" → "Freshman" }.
+     * Returns an empty map if no tab nav is found.
+     */
+    private Map<String, String> extractTabPanelLevels(Document doc) {
+        Map<String, String> result = new LinkedHashMap<>();
+        // OSAA uses jQuery UI tabs: <ul class="ui-tabs-nav"> with <li><a href="#tabs-V">Varsity</a></li>
+        Element tabNav = doc.selectFirst("ul.ui-tabs-nav");
+        if (tabNav == null) return result;
+
+        for (Element li : tabNav.select("li")) {
+            Element a = li.selectFirst("a[href^='#']");
+            if (a == null) continue;
+            String href  = a.attr("href"); // e.g. "#tabs-V"
+            String label = a.text().trim();
+            if (href.length() > 1 && !label.isEmpty()) {
+                String panelId = href.substring(1); // strip leading '#'
+                String level = mapTabLabel(label);
+                result.put(panelId, level);
+            }
+        }
+        return result;
+    }
+
+    /** Maps a tab label like "Junior Varsity" to a canonical level string. */
+    private String mapTabLabel(String label) {
+        String t = label.toLowerCase();
+        if (t.contains("junior varsity") || t.contains("j.v.")) return "JV";
+        if (t.matches(".*\\bjv\\b.*"))   return "JV";
+        if (t.contains("freshman"))      return "Freshman";
+        if (t.contains("sophom"))        return "Sophomore";
+        if (t.contains("8th grade") || t.contains("middle school")) return "Middle School";
+        if (t.contains("varsity"))       return "Varsity";
+        return label; // preserve original text when unknown
     }
 
     private Map<String, String> parseContestElement(Element el, String sport, String level,
