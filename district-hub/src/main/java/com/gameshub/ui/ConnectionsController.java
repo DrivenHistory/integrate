@@ -255,10 +255,26 @@ public class ConnectionsController {
         Label dot = new Label("●");
         dot.setStyle("-fx-font-size: 8px;");
         String connectorId = PLATFORM_TO_CONNECTOR.get(platform);
-        boolean hasConnector = connectorId != null
-            && Arrays.stream(App.syncEngine.getConnectors())
-                .anyMatch(c -> connectorId.equals(c.getPlatformName()));
-        dot.getStyleClass().add(hasConnector ? "status-dot-connected" : "status-dot-unavailable");
+
+        // Find the actual connector instance for this state's platform (if any)
+        PlatformConnector stateConnector = null;
+        if (connectorId != null) {
+            for (PlatformConnector c : App.syncEngine.getConnectors()) {
+                if (connectorId.equals(c.getPlatformName())) { stateConnector = c; break; }
+            }
+        }
+
+        // Three states: no connector class → unavailable (gray)
+        //               connector exists, no school URL → disconnected (red)
+        //               connector + school URL configured → connected (green)
+        String dotClass;
+        if (stateConnector == null) {
+            dotClass = "status-dot-unavailable";
+        } else {
+            String ep = stateConnector.getConfig().getEndpoint();
+            dotClass = (ep != null && !ep.isBlank()) ? "status-dot-connected" : "status-dot-disconnected";
+        }
+        dot.getStyleClass().add(dotClass);
 
         VBox nameBox = new VBox(1);
         HBox.setHgrow(nameBox, Priority.ALWAYS);
@@ -328,6 +344,8 @@ public class ConnectionsController {
             }
         }
         boolean hasConnector = matchedConnector != null;
+        boolean hasSchoolUrl = hasConnector && matchedConnector.getConfig().getEndpoint() != null
+            && !matchedConnector.getConfig().getEndpoint().isBlank();
 
         // ── Header ──
         HBox header = new HBox(12);
@@ -351,7 +369,20 @@ public class ConnectionsController {
             titleBox.getChildren().add(titleLbl);
         }
 
-        header.getChildren().add(titleBox);
+        // Status badge in header — reflects whether a school URL is actually configured
+        Label headerBadge;
+        if (!hasConnector) {
+            headerBadge = new Label("● No Connector");
+            headerBadge.getStyleClass().add("badge-coming-soon");
+        } else if (hasSchoolUrl) {
+            headerBadge = new Label("● Active");
+            headerBadge.getStyleClass().add("badge-connected");
+        } else {
+            headerBadge = new Label("● School Not Set");
+            headerBadge.getStyleClass().add("badge-disconnected");
+        }
+
+        header.getChildren().addAll(titleBox, headerBadge);
 
         // ── Body ──
         VBox body = new VBox(24);
