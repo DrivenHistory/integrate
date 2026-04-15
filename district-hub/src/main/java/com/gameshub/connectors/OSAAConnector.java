@@ -205,19 +205,21 @@ public class OSAAConnector implements PlatformConnector {
      * schedule page. Rate-limited to avoid overwhelming OSAA's servers.
      */
     private List<SyncRecord> doFirstSync(String schoolId, String pulledAt) {
-        Set<String> teamIds = new LinkedHashSet<>();
+        // teamId → link label (e.g. "Football Varsity", "Basketball Junior Varsity")
+        // LinkedHashMap preserves insertion order; existing keys are NOT overwritten so
+        // the school profile label (most authoritative) always wins over activity pages.
+        Map<String, String> teamLabels = new LinkedHashMap<>();
 
-        // 1. School profile page — lists current teams
+        // 1. School profile page — lists current teams with descriptive link text
         db.insertSyncLog("INFO", PLATFORM, "Fetching school profile: /schools/" + schoolId);
         String schoolHtml = fetchPage(BASE + "/schools/" + schoolId);
         if (schoolHtml != null) {
-            teamIds.addAll(extractTeamLinksFromPage(schoolHtml));
-            db.insertSyncLog("INFO", PLATFORM, "Found " + teamIds.size() + " team(s) on school profile");
+            teamLabels.putAll(extractTeamLinksWithLabels(schoolHtml));
+            db.insertSyncLog("INFO", PLATFORM, "Found " + teamLabels.size() + " team(s) on school profile");
         }
         throttleRandom();
 
-        // 2. Activity schedule pages — one per sport per year — finds historical teams
-        //    that may not appear on the current profile anymore.
+        // 2. Activity schedule pages — catches historical teams no longer on current profile
         int baseYear = academicBaseYear();
         for (int offset = 0; offset < FIRST_SYNC_YEARS; offset++) {
             int year = baseYear - offset;
@@ -226,29 +228,32 @@ public class OSAAConnector implements PlatformConnector {
                 String url = BASE + "/activities/" + sport + "/schedules?year=" + year;
                 String html = fetchPage(url);
                 if (html != null) {
-                    List<String> found = extractTeamIdsForSchool(html, schoolId);
-                    teamIds.addAll(found);
+                    // putIfAbsent: activity-page labels are lower priority than profile labels
+                    extractTeamIdsForSchoolWithLabels(html, schoolId, sport)
+                        .forEach(teamLabels::putIfAbsent);
                 }
             }
             db.insertSyncLog("INFO", PLATFORM,
-                "Year " + year + " discovery complete — " + teamIds.size() + " unique team(s) found");
+                "Year " + year + " discovery complete — " + teamLabels.size() + " unique team(s) found");
         }
 
-        if (teamIds.isEmpty()) {
+        if (teamLabels.isEmpty()) {
             db.insertSyncLog("WARNING", PLATFORM,
                 "No teams found for school ID " + schoolId + " — verify the ID in Connections");
             return Collections.emptyList();
         }
 
         db.insertSyncLog("INFO", PLATFORM,
-            "Fetching schedules for " + teamIds.size() + " team(s)...");
+            "Fetching schedules for " + teamLabels.size() + " team(s)...");
 
-        // 3. Fetch each team page for full schedule + results
+        // 3. Fetch each team page, using the discovery label for sport + level
         List<SyncRecord> records = new ArrayList<>();
         int idx = 0;
-        for (String teamId : teamIds) {
+        for (Map.Entry<String, String> entry : teamLabels.entrySet()) {
+            String teamId = entry.getKey();
+            String label  = entry.getValue(); // e.g. "Football Varsity"
             throttleRandom();
-            List<Map<String, String>> games = fetchTeamSchedule(teamId);
+            List<Map<String, String>> games = fetchTeamSchedule(teamId, label);
             for (Map<String, String> game : games) {
                 try {
                     records.add(new SyncRecord(
@@ -257,9 +262,9 @@ public class OSAAConnector implements PlatformConnector {
                 } catch (Exception ignored) {}
             }
             idx++;
-            if (idx % 5 == 0 || idx == teamIds.size()) {
+            if (idx % 5 == 0 || idx == teamLabels.size()) {
                 db.insertSyncLog("INFO", PLATFORM,
-                    "Progress: " + idx + "/" + teamIds.size() + " teams — " + records.size() + " games so far");
+                    "Progress: " + idx + "/" + teamLabels.size() + " teams — " + records.size() + " games so far");
             }
         }
         return records;
@@ -303,18 +308,28 @@ public class OSAAConnector implements PlatformConnector {
 
     // ── Team schedule page parser ─────────────────────────────────────────────
 
-    private List<Map<String, String>> fetchTeamSchedule(String teamId) {
+    private List<Map<String, String>> fetchTeamSchedule(String teamId, String discoveryLabel) {
         String html = fetchPage(BASE + "/teams/" + teamId);
         if (html == null) return Collections.emptyList();
-        return parseTeamPage(html, teamId);
+        return parseTeamPage(html, teamId, discoveryLabel);
     }
 
-    private List<Map<String, String>> parseTeamPage(String html, String teamId) {
+    private List<Map<String, String>> parseTeamPage(String html, String teamId, String discoveryLabel) {
         Document doc = Jsoup.parse(html);
         List<Map<String, String>> games = new ArrayList<>();
 
-        String sport    = extractSportFromTeamPage(doc);
-        String level    = extractLevelFromTeamPage(doc);
+        // Use the discovery label (link text from the school profile page) as the primary
+        // source for sport and level — it's already human-readable and reliable.
+        // Fall back to page-content extraction only when the label is blank.
+        String sport;
+        String level;
+        if (discoveryLabel != null && !discoveryLabel.isBlank()) {
+            sport = extractSportFromLabel(discoveryLabel);
+            level = extractLevelFromLabel(discoveryLabel);
+        } else {
+            sport = extractSportFromTeamPage(doc);
+            level = extractLevelFromTeamPage(doc);
+        }
         String ourSchool = extractSchoolNameFromTeamPage(doc);
 
         // OSAA contest containers — try several selector strategies
@@ -484,40 +499,51 @@ public class OSAAConnector implements PlatformConnector {
     // ── Team discovery helpers ────────────────────────────────────────────────
 
     /**
-     * Extracts /teams/{id} href values from any page (school profile, etc.).
+     * Extracts /teams/{id} links from a school profile page, returning a map of
+     * teamId → anchor text (e.g. {"63039": "Football Varsity", "63040": "Football JV"}).
+     * The anchor text is the primary source for sport and level classification.
      */
-    private List<String> extractTeamLinksFromPage(String html) {
+    private Map<String, String> extractTeamLinksWithLabels(String html) {
         Document doc = Jsoup.parse(html);
-        List<String> ids = new ArrayList<>();
+        Map<String, String> result = new LinkedHashMap<>();
         for (Element a : doc.select("a[href*='/teams/']")) {
             Matcher m = TEAM_LINK.matcher(a.attr("href"));
-            if (m.find()) ids.add(m.group(1));
+            if (m.find()) {
+                String id    = m.group(1);
+                String label = a.text().trim();
+                result.putIfAbsent(id, label.isBlank() ? id : label);
+            }
         }
-        return ids;
+        return result;
     }
 
     /**
-     * From an activity schedule page (all schools), extracts team IDs that
-     * belong to the given school by finding rows that link to /schools/{schoolId}
-     * and also contain a /teams/{id} link.
+     * From an activity schedule page (all schools), extracts team IDs for the
+     * given school, returning teamId → label. The sport code is used as a fallback
+     * label when the page doesn't provide descriptive anchor text.
      */
-    private List<String> extractTeamIdsForSchool(String html, String schoolId) {
+    private Map<String, String> extractTeamIdsForSchoolWithLabels(String html, String schoolId,
+                                                                    String sportCode) {
         Document doc = Jsoup.parse(html);
-        List<String> ids = new ArrayList<>();
+        Map<String, String> result = new LinkedHashMap<>();
         String schoolHrefFrag = "/schools/" + schoolId;
+        String sportDisplay   = SPORT_DISPLAY.getOrDefault(sportCode, sportCode);
 
-        // Strategy A: table rows or div containers that have both school and team links
+        // Strategy A: rows that have both a school link and a team link
         for (Element container : doc.select("tr, .schedule-row, .school-row, .entry")) {
-            boolean hasSchool = !container.select("[href*='" + schoolHrefFrag + "']").isEmpty();
-            if (!hasSchool) continue;
+            if (container.select("[href*='" + schoolHrefFrag + "']").isEmpty()) continue;
             for (Element a : container.select("[href*='/teams/']")) {
                 Matcher m = TEAM_LINK.matcher(a.attr("href"));
-                if (m.find()) ids.add(m.group(1));
+                if (m.find()) {
+                    String id    = m.group(1);
+                    String label = a.text().trim();
+                    result.putIfAbsent(id, label.isBlank() ? sportDisplay : label);
+                }
             }
         }
 
-        // Strategy B: find the school anchor and look in its parent container
-        if (ids.isEmpty()) {
+        // Strategy B: walk up from each school anchor to find a sibling team link
+        if (result.isEmpty()) {
             for (Element schoolAnchor : doc.select("a[href*='" + schoolHrefFrag + "']")) {
                 Element parent = schoolAnchor.parent();
                 for (int depth = 0; depth < 3 && parent != null; depth++) {
@@ -525,7 +551,11 @@ public class OSAAConnector implements PlatformConnector {
                     if (!teamLinks.isEmpty()) {
                         for (Element a : teamLinks) {
                             Matcher m = TEAM_LINK.matcher(a.attr("href"));
-                            if (m.find()) ids.add(m.group(1));
+                            if (m.find()) {
+                                String id    = m.group(1);
+                                String label = a.text().trim();
+                                result.putIfAbsent(id, label.isBlank() ? sportDisplay : label);
+                            }
                         }
                         break;
                     }
@@ -533,7 +563,7 @@ public class OSAAConnector implements PlatformConnector {
                 }
             }
         }
-        return ids;
+        return result;
     }
 
     private String fetchSchoolName(String schoolId) {
@@ -707,6 +737,41 @@ public class OSAAConnector implements PlatformConnector {
             if (el != null && !el.text().isBlank()) return el.text().trim();
         }
         return null;
+    }
+
+    /**
+     * Extracts the sport display name from a discovery label such as
+     * "Football Varsity", "Basketball Junior Varsity", "Baseball Freshman".
+     * Strips level keywords and normalises the remainder.
+     */
+    private String extractSportFromLabel(String label) {
+        String stripped = label
+            .replaceAll("(?i)\\bjunior varsity\\b", "")
+            .replaceAll("(?i)\\bj\\.?v\\.?\\b", "")
+            .replaceAll("(?i)\\bvarsity\\b", "")
+            .replaceAll("(?i)\\bfreshman\\b", "")
+            .replaceAll("(?i)\\bsophomore\\b", "")
+            .replaceAll("(?i)\\bmiddle school\\b", "")
+            .replaceAll("(?i)\\b8th grade\\b", "")
+            .replaceAll("\\s{2,}", " ")
+            .trim();
+        return stripped.isEmpty() ? "Athletics" : stripped;
+    }
+
+    /**
+     * Extracts the competition level from a discovery label.
+     * Checks from most specific ("Junior Varsity") to least specific ("Varsity")
+     * so that "Junior Varsity" is never mis-classified as "Varsity".
+     */
+    private String extractLevelFromLabel(String label) {
+        String t = label.toLowerCase();
+        if (t.contains("junior varsity") || t.contains("j.v.")) return "JV";
+        if (t.matches(".*\\bjv\\b.*"))   return "JV";
+        if (t.contains("freshman"))      return "Freshman";
+        if (t.contains("sophom"))        return "Sophomore";
+        if (t.contains("8th grade") || t.contains("middle school")) return "Middle School";
+        if (t.contains("varsity"))       return "Varsity";
+        return "Varsity"; // safest default when no keyword found
     }
 
     // ── HTTP helpers ──────────────────────────────────────────────────────────
