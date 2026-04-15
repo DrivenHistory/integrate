@@ -146,11 +146,14 @@ public class MainController {
             HBox row = makeSidebarRow(p, vendorDisplayName(p), "status-dot-unknown");
             platformStatusContainer.getChildren().add(row);
         }
-        // State associations: show when their underlying connector has a school URL configured
+        // State association: show whichever one is connected (has a school URL configured).
+        // Only one state assoc connector can be active at a time in the current design.
         for (String state : ConnectionsController.ALL_STATES) {
             if (!isStateConnected(state)) continue;
-            HBox row = makeSidebarRow("state_" + state, "State Association - " + state, "status-dot-connected");
+            HBox row = makeSidebarRow("state_" + state,
+                "State Association - " + state, "status-dot-connected");
             platformStatusContainer.getChildren().add(row);
+            break; // only one state assoc entry in the sidebar
         }
     }
 

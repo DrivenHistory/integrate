@@ -500,8 +500,28 @@ public class ConnectionsController {
                 HBox.setHgrow(urlField, Priority.ALWAYS);
                 String existing = config.getEndpoint();
                 if (existing != null && !existing.isBlank()) urlField.setText(existing);
-                urlField.textProperty().addListener((obs, oldVal, newVal) ->
-                    App.db.updateEndpoint(connectorId, newVal.trim()));
+
+                // Live update: as soon as a URL is entered/cleared, reflect the new
+                // connection state in the header badge, list-row dot, and sidebar.
+                final Label badge = headerBadge;
+                urlField.textProperty().addListener((obs, oldVal, newVal) -> {
+                    String trimmed = newVal.trim();
+                    App.db.updateEndpoint(connectorId, trimmed);
+                    boolean connected = !trimmed.isBlank();
+                    // Header badge
+                    badge.setText(connected ? "● Active" : "● School Not Set");
+                    badge.getStyleClass().setAll(connected ? "badge-connected" : "badge-disconnected");
+                    // Dot in the left-panel state row
+                    vendorListContainer.getChildren().forEach(node -> {
+                        if (node instanceof HBox row && STATE_ASSOC_SENTINEL.equals(row.getUserData())) {
+                            Label dot = (Label) row.getChildren().get(0);
+                            dot.getStyleClass().setAll(connected
+                                ? "status-dot-connected" : "status-dot-disconnected");
+                        }
+                    });
+                    // Sidebar (bottom-left on main screen)
+                    if (App.mainController != null) App.mainController.refreshPlatformStatus();
+                });
 
                 if (isFanX) {
                     urlRow.getChildren().addAll(urlLbl, urlField);
