@@ -115,7 +115,7 @@ public class ConnectionsController {
     );
 
     /** Primary data platform for each state association. */
-    private static final Map<String, String> STATE_PLATFORMS = Map.ofEntries(
+    static final Map<String, String> STATE_PLATFORMS = Map.ofEntries(
         Map.entry("Alabama",        "ScoreBird"),
         Map.entry("Alaska",         "MaxPreps"),
         Map.entry("Arizona",        "Own/Proprietary"),
@@ -169,7 +169,7 @@ public class ConnectionsController {
     );
 
     /** Maps platform display names to internal connector IDs. */
-    private static final Map<String, String> PLATFORM_TO_CONNECTOR = Map.of(
+    static final Map<String, String> PLATFORM_TO_CONNECTOR = Map.of(
         "MaxPreps",       "maxpreps",
         "ArbiterSports",  "arbiter",
         "OSAA",           "osaa",
@@ -210,7 +210,8 @@ public class ConnectionsController {
         List<PlatformConnector> connectors = sortedConnectors();
 
         for (PlatformConnector connector : connectors) {
-            int connOrder = App.db.getPlatformConfig(connector.getPlatformName()).getSyncOrder();
+            String pid = connector.getPlatformName();
+            int connOrder = App.db.getPlatformConfig(pid).getSyncOrder();
 
             // Insert state assoc before the first connector whose order >= stateAssocOrder
             if (!stateRowInserted && selectedState != null && !selectedState.isBlank()
@@ -218,6 +219,9 @@ public class ConnectionsController {
                 vendorListContainer.getChildren().add(buildStateAssocRow(selectedState, stateAssocOrder));
                 stateRowInserted = true;
             }
+            // State assoc connectors (osaa, rschooltoday, etc.) are already represented
+            // by the state association row above — skip them in the regular vendor list.
+            if (isStateAssocConnector(pid)) continue;
             vendorListContainer.getChildren().add(buildVendorRow(connector));
         }
 
@@ -1347,19 +1351,28 @@ public class ConnectionsController {
     }
 
     private void updateSummary(List<PlatformConnector> connectors) {
-        // Only count platforms that are actually available (not coming soon)
+        // Count available platforms (not coming soon, not the hidden state-assoc connectors
+        // which are shown via the state row — count those separately via isConnected()).
         List<PlatformConnector> available = connectors.stream()
-            .filter(c -> !isComingSoon(c.getPlatformName()))
+            .filter(c -> !isComingSoon(c.getPlatformName()) && !isStateAssocConnector(c.getPlatformName()))
             .toList();
-        Task<Integer> countTask = new Task<>() {
+        // State assoc connectors that are actually configured count as 1 extra
+        List<PlatformConnector> stateAssocConnectors = connectors.stream()
+            .filter(c -> isStateAssocConnector(c.getPlatformName()))
+            .toList();
+        Task<Integer[]> countTask = new Task<>() {
             @Override
-            protected Integer call() {
-                return (int) available.stream().filter(PlatformConnector::isConnected).count();
+            protected Integer[] call() {
+                int vendorConnected = (int) available.stream().filter(PlatformConnector::isConnected).count();
+                int stateConnected  = (int) stateAssocConnectors.stream().filter(PlatformConnector::isConnected).count();
+                int total = available.size() + (stateConnected > 0 ? 1 : 0);
+                return new Integer[]{ vendorConnected + stateConnected, total };
             }
         };
         countTask.setOnSucceeded(e -> {
-            int count = countTask.getValue();
-            summaryLabel.setText(count + " of " + available.size() + " Connected");
+            Integer[] result = countTask.getValue();
+            int count = result[0]; int total = result[1];
+            summaryLabel.setText(count + " of " + total + " Connected");
             summaryDot.getStyleClass().removeAll("status-dot-connected", "status-dot-disconnected");
             summaryDot.getStyleClass().add(count > 0 ? "status-dot-connected" : "status-dot-disconnected");
         });
@@ -1374,6 +1387,14 @@ public class ConnectionsController {
     private boolean isPreWired(String platform) {
         return switch (platform) {
             case "arbiter" -> true;
+            default -> false;
+        };
+    }
+
+    /** Returns true for connector IDs that are state athletic associations. */
+    private boolean isStateAssocConnector(String platform) {
+        return switch (platform) {
+            case "osaa", "rschooltoday", "scorebird", "khsaa", "nysphsaa" -> true;
             default -> false;
         };
     }

@@ -133,14 +133,16 @@ public class OSAAConnector implements PlatformConnector {
     }
 
     /**
-     * Connected when the stored school ID is non-blank and the school profile
-     * page returns HTTP 200 (no login required for public pages).
+     * Connected when the stored school ID is non-blank.
+     * We do NOT make a live network check here because OSAA is behind Cloudflare's
+     * JS challenge, which the plain HttpClient cannot pass — so a HEAD request would
+     * always return false even when the configuration is valid.
+     * The convention for URL-configured connectors is: endpoint set → connected.
      */
     @Override
     public boolean isConnected() {
         String schoolId = resolveSchoolId(getConfig().getEndpoint());
-        if (schoolId == null || schoolId.isBlank()) return false;
-        return headRequest200(BASE + "/schools/" + schoolId);
+        return schoolId != null && !schoolId.isBlank();
     }
 
     /**

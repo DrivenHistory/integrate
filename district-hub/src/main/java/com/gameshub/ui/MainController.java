@@ -18,8 +18,18 @@ import javafx.scene.web.WebView;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 
 public class MainController {
+
+    /**
+     * Connector IDs that represent a state athletic association.
+     * These are shown via the state-association sidebar entry rather than as
+     * standalone vendor rows, so they must be excluded from the vendor loop.
+     */
+    private static final Set<String> STATE_ASSOC_CONNECTOR_IDS = Set.of(
+        "osaa", "rschooltoday", "scorebird", "khsaa", "nysphsaa"
+    );
 
     @FXML private StackPane contentArea;
     @FXML private HBox navSchedule;
@@ -102,9 +112,12 @@ public class MainController {
         Task<Void> task = new Task<>() {
             @Override protected Void call() {
                 for (PlatformConnector c : App.syncEngine.getConnectors()) {
-                    if (!isVendorConfigured(c.getPlatformName())) continue;
-                    boolean ok = c.isConnected();
                     String id = c.getPlatformName();
+                    // State assoc connectors appear as state rows (userData = "state_XYZ"),
+                    // not as vendor rows — their dot is set at build time and never needs async update.
+                    if (STATE_ASSOC_CONNECTOR_IDS.contains(id)) continue;
+                    if (!isVendorConfigured(id)) continue;
+                    boolean ok = c.isConnected();
                     Platform.runLater(() -> platformStatusContainer.getChildren().stream()
                         .filter(n -> id.equals(n.getUserData()))
                         .findFirst().ifPresent(n -> {
@@ -127,13 +140,16 @@ public class MainController {
         List<PlatformConfig> configs = App.db.getAllPlatformConfigs();
         for (PlatformConfig cfg : configs) {
             String p = cfg.getPlatform();
+            // State assoc connectors are represented by the state row below — skip here
+            if (STATE_ASSOC_CONNECTOR_IDS.contains(p)) continue;
             if (!isVendorConfigured(p)) continue;
             HBox row = makeSidebarRow(p, vendorDisplayName(p), "status-dot-unknown");
             platformStatusContainer.getChildren().add(row);
         }
+        // State associations: show when their underlying connector has a school URL configured
         for (String state : ConnectionsController.ALL_STATES) {
             if (!isStateConnected(state)) continue;
-            HBox row = makeSidebarRow("state_" + state, state, "status-dot-connected");
+            HBox row = makeSidebarRow("state_" + state, state + " (State)", "status-dot-connected");
             platformStatusContainer.getChildren().add(row);
         }
     }
@@ -160,9 +176,22 @@ public class MainController {
             .orElse(false);
     }
 
+    /**
+     * A state association is considered "connected" when its underlying connector exists
+     * and has a non-blank school endpoint configured — same rule used for the dot in
+     * the Connections screen state row. No DB setting is needed; the endpoint IS the truth.
+     */
     private boolean isStateConnected(String state) {
-        String key = "state_" + state.toLowerCase().replace(" ", "_") + "_connected";
-        return "true".equals(App.db.getSetting(key, "false"));
+        String platform  = ConnectionsController.STATE_PLATFORMS.getOrDefault(state, "");
+        String connId    = ConnectionsController.PLATFORM_TO_CONNECTOR.get(platform);
+        if (connId == null) return false;
+        for (PlatformConnector c : App.syncEngine.getConnectors()) {
+            if (connId.equals(c.getPlatformName())) {
+                String ep = c.getConfig().getEndpoint();
+                return ep != null && !ep.isBlank();
+            }
+        }
+        return false;
     }
 
     private String vendorDisplayName(String platform) {
