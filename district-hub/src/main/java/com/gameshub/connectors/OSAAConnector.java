@@ -320,17 +320,24 @@ public class OSAAConnector implements PlatformConnector {
         Document doc = Jsoup.parse(html);
         List<Map<String, String>> games = new ArrayList<>();
 
-        // Use the discovery label (link text from the school profile page) as the primary
-        // source for sport and level — it's already human-readable and reliable.
-        // Fall back to page-content extraction only when the label is blank.
+        // Sport: from discovery label if available, else from page content
         String sport;
-        String level;
         if (discoveryLabel != null && !discoveryLabel.isBlank()) {
             sport = extractSportFromLabel(discoveryLabel);
-            level = extractLevelFromLabel(discoveryLabel);
         } else {
             sport = extractSportFromTeamPage(doc);
-            level = extractLevelFromTeamPage(doc);
+        }
+
+        // Level: OSAA team pages have nav tabs (Varsity / Junior Varsity / Freshman).
+        // The active tab is the most reliable level indicator — use it first, then
+        // fall back to discovery label, then page content.
+        String level = extractLevelFromTabs(doc);
+        if (level == null) {
+            if (discoveryLabel != null && !discoveryLabel.isBlank()) {
+                level = extractLevelFromLabel(discoveryLabel);
+            } else {
+                level = extractLevelFromTeamPage(doc);
+            }
         }
         String ourSchool = extractSchoolNameFromTeamPage(doc);
 
@@ -817,6 +824,36 @@ public class OSAAConnector implements PlatformConnector {
         }
         Element h = doc.selectFirst("h1, h2, .team-name, .sport-name, .page-title");
         return h != null ? h.text().trim() : "Athletics";
+    }
+
+    /**
+     * Extracts the competition level from OSAA's nav tabs on the team page.
+     * The active tab (highlighted, selected) tells us which level this page is.
+     * Returns null if no recognisable tab structure is found.
+     */
+    private String extractLevelFromTabs(Document doc) {
+        // OSAA uses nav-tabs style navigation: Varsity | Junior Varsity | Freshman
+        // The active tab is marked with class "active", "selected", or "current".
+        for (String tabContainer : List.of(".nav-tabs", ".nav.nav-tabs", "ul.nav",
+                                           ".tabs", ".tab-nav", ".level-tabs")) {
+            Element nav = doc.selectFirst(tabContainer);
+            if (nav == null) continue;
+
+            // Find the active tab within this container
+            Element activeTab = nav.selectFirst("li.active a, li.active, a.active, a.selected, a.current, .active a");
+            if (activeTab == null) continue;
+
+            String text = activeTab.text().trim().toLowerCase();
+            if (text.isEmpty()) continue;
+
+            if (text.contains("junior varsity") || text.contains("j.v.")) return "JV";
+            if (text.matches(".*\\bjv\\b.*"))   return "JV";
+            if (text.contains("freshman"))      return "Freshman";
+            if (text.contains("sophom"))        return "Sophomore";
+            if (text.contains("8th grade") || text.contains("middle school")) return "Middle School";
+            if (text.contains("varsity"))       return "Varsity";
+        }
+        return null;
     }
 
     private String extractLevelFromTeamPage(Document doc) {
