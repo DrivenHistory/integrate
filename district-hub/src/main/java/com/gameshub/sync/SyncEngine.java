@@ -281,10 +281,12 @@ public class SyncEngine {
                 awayTeam = m.getOrDefault("awayTeam", "");
             }
 
-            // Build location
+            // Build location — connector may provide a pre-built "location" key or raw "venue"/"field"
+            String locationDirect = m.getOrDefault("location", "");
             String venue = m.getOrDefault("venue", "");
             String field = m.getOrDefault("field", "");
-            String location = venue.isBlank() ? field
+            String location = !locationDirect.isBlank() ? locationDirect
+                : venue.isBlank() ? field
                 : field.isBlank() ? venue
                 : venue + " – " + field;
 
@@ -292,10 +294,15 @@ public class SyncEngine {
             Integer homeScore = parseScore(m.get("homeScore"));
             Integer awayScore = parseScore(m.get("awayScore"));
 
-            // Status: cancelled takes priority; otherwise future→scheduled, past→completed
+            // Status: prefer explicit "status" key from connector; fall back to heuristics
             String status;
-            if ("true".equals(m.get("cancelled"))) {
+            String rawStatus = m.getOrDefault("status", "");
+            if ("cancelled".equals(rawStatus) || "true".equals(m.get("cancelled"))) {
                 status = "cancelled";
+            } else if ("completed".equals(rawStatus)) {
+                status = "completed";
+            } else if ("postponed".equals(rawStatus)) {
+                status = "postponed";
             } else {
                 status = "future".equals(m.get("period")) ? "scheduled" : "completed";
             }

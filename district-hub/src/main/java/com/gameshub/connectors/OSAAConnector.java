@@ -353,7 +353,6 @@ public class OSAAConnector implements PlatformConnector {
                                                      String ourSchool, String teamId) {
         Map<String, String> game = new LinkedHashMap<>();
         game.put("sport", sport);
-        game.put("level", level);
         game.put("platformTeamId", teamId);
 
         // Date — required
@@ -361,15 +360,24 @@ public class OSAAConnector implements PlatformConnector {
         if (dateStr == null) return null;
         game.put("gameDate", dateStr);
 
-        // Time — optional
-        String time = extractTime(el);
-        if (time != null) game.put("gameTime", time);
+        // Parse the OSAA contest text line — this is the primary source for opponent,
+        // home/away, level override, location, and status.
+        // OSAA format: "[Done|Canceled] [Type] [Code] [Time] [@ | vs.] Opponent [[Level]] [(Location)]"
+        String rawText = el.text().trim();
+        Map<String, String> parsed = parseOsaaContestText(rawText);
 
-        // Home/Away + opponent
-        String homeAway = extractHomeAway(el);
-        String opponent = extractOpponent(el);
+        String opponent = parsed.get("opponent");
         if (opponent == null || opponent.isBlank()) return null;
 
+        // Level: [JV], [JV2], [FR] in the contest text override the discovery-label level.
+        // This is how OSAA encodes which sub-program each game belongs to on a program page.
+        String effectiveLevel = parsed.containsKey("levelOverride")
+            ? parsed.get("levelOverride")
+            : level;
+        game.put("level", effectiveLevel);
+
+        // Home/Away: our team is always the team whose page we fetched
+        String homeAway = parsed.getOrDefault("homeAway", "home");
         String us = ourSchool != null ? ourSchool : "Home Team";
         if ("away".equalsIgnoreCase(homeAway)) {
             game.put("homeTeam", opponent);
@@ -379,11 +387,19 @@ public class OSAAConnector implements PlatformConnector {
             game.put("awayTeam", opponent);
         }
 
-        // Location
-        String location = extractLocation(el);
-        if (location != null) game.put("location", location);
+        // Location from contest text
+        String location = parsed.get("location");
+        if (location != null && !location.isBlank()) game.put("location", location);
 
-        // Score
+        // Status from "Done"/"Canceled" prefix and score presence
+        String contestStatus = parsed.getOrDefault("status", "scheduled");
+
+        // Time — from contest text or dedicated element
+        String time = parsed.get("time");
+        if (time == null) time = extractTime(el);
+        if (time != null) game.put("gameTime", time);
+
+        // Score — look for "N-N" pattern in the element
         String score = extractScore(el);
         if (score != null) {
             String[] parts = score.split("[\\-–]", 2);
@@ -391,49 +407,147 @@ public class OSAAConnector implements PlatformConnector {
                 try {
                     int s1 = Integer.parseInt(parts[0].trim());
                     int s2 = Integer.parseInt(parts[1].trim());
-                    String resultCode = extractResult(el); // W, L, T
-
-                    // Scores are typically displayed as "OurScore-TheirScore"
-                    // Assign home/away based on homeAway field
-                    if ("W".equalsIgnoreCase(resultCode)) {
-                        // We won: our score is the higher value
-                        int ourScore = Math.max(s1, s2);
-                        int theirScore = Math.min(s1, s2);
-                        if ("away".equalsIgnoreCase(homeAway)) {
-                            game.put("homeScore", String.valueOf(theirScore));
-                            game.put("awayScore", String.valueOf(ourScore));
-                        } else {
-                            game.put("homeScore", String.valueOf(ourScore));
-                            game.put("awayScore", String.valueOf(theirScore));
-                        }
-                    } else if ("L".equalsIgnoreCase(resultCode)) {
-                        // We lost: our score is the lower value
-                        int ourScore = Math.min(s1, s2);
-                        int theirScore = Math.max(s1, s2);
-                        if ("away".equalsIgnoreCase(homeAway)) {
-                            game.put("homeScore", String.valueOf(theirScore));
-                            game.put("awayScore", String.valueOf(ourScore));
-                        } else {
-                            game.put("homeScore", String.valueOf(ourScore));
-                            game.put("awayScore", String.valueOf(theirScore));
-                        }
+                    // OSAA score order: our score – their score
+                    if ("away".equalsIgnoreCase(homeAway)) {
+                        game.put("homeScore", String.valueOf(s2));
+                        game.put("awayScore", String.valueOf(s1));
                     } else {
-                        // No result code — use the raw order from the page
-                        if ("away".equalsIgnoreCase(homeAway)) {
-                            game.put("homeScore", String.valueOf(s2));
-                            game.put("awayScore", String.valueOf(s1));
-                        } else {
-                            game.put("homeScore", String.valueOf(s1));
-                            game.put("awayScore", String.valueOf(s2));
-                        }
+                        game.put("homeScore", String.valueOf(s1));
+                        game.put("awayScore", String.valueOf(s2));
                     }
-                    game.put("status", "completed");
+                    contestStatus = "completed";
                 } catch (NumberFormatException ignored) {}
             }
         }
 
-        if (!game.containsKey("status")) game.put("status", "scheduled");
+        game.put("status", contestStatus);
         return game;
+    }
+
+    /**
+     * Parses an OSAA contest text line into its component parts.
+     *
+     * OSAA format:
+     *   [Done|Canceled|Postponed] [Type] [Code] [Time] [@ | vs.] Opponent [[Level]] [(Location)]
+     *
+     * Examples:
+     *   "Done Non-League 7pm @ South Albany"
+     *   "Non-League 7pm vs. Hillsboro (Hare Field - Turf)"
+     *   "Done Non-League @ South Albany [JV]"
+     *   "Canceled Non-League vs. Hood River Valley [FR] (Hare Field - Grass)"
+     *   "Playoff (1) S 2pm @ Cleveland"
+     *   "Non-League vs. Camas (WA) (Lincoln Street Elementary)"
+     *
+     * Returns a map with some/all of these keys:
+     *   opponent      — opponent team name (cleaned)
+     *   homeAway      — "home" (vs.) or "away" (@)
+     *   status        — "completed", "cancelled", "postponed", or "scheduled"
+     *   levelOverride — (optional) "Varsity", "JV", "Freshman", "Sophomore"
+     *   location      — (optional) venue from trailing (...)
+     *   time          — (optional) e.g. "7pm", "3pm", "12:30pm"
+     */
+    private Map<String, String> parseOsaaContestText(String rawText) {
+        Map<String, String> result = new LinkedHashMap<>();
+        if (rawText == null || rawText.isBlank()) return result;
+
+        String text = rawText.trim();
+
+        // 1. Extract leading status prefix
+        String status = "scheduled";
+        if (text.startsWith("Done ") || text.equals("Done")) {
+            status = "completed";
+            text = text.substring(text.indexOf(' ') + 1).trim();
+        } else if (text.startsWith("Canceled ") || text.startsWith("Cancelled ")
+                || text.equals("Canceled") || text.equals("Cancelled")) {
+            status = "cancelled";
+            text = text.substring(text.indexOf(' ') + 1).trim();
+        } else if (text.startsWith("Postponed ") || text.equals("Postponed")) {
+            status = "postponed";
+            text = text.substring(text.indexOf(' ') + 1).trim();
+        }
+        result.put("status", status);
+
+        // 2. Extract time before the @ / vs. split (e.g. "7pm", "3pm", "12:30pm")
+        Pattern timePat = Pattern.compile("\\b(\\d{1,2}(?::\\d{2})?\\s*(?:am|pm))\\b",
+                                          Pattern.CASE_INSENSITIVE);
+        Matcher timeMatcher = timePat.matcher(text);
+        if (timeMatcher.find()) {
+            result.put("time", timeMatcher.group(1).trim());
+            text = (text.substring(0, timeMatcher.start())
+                  + text.substring(timeMatcher.end()))
+                  .replaceAll("\\s{2,}", " ").trim();
+        }
+
+        // 3. Find "@ " (away) or "vs. " / "versus " (home) — split there
+        String homeAway = "home";
+        int splitIdx = -1;
+
+        Pattern atPat = Pattern.compile("(?<![a-zA-Z])@\\s+");
+        Pattern vsPat = Pattern.compile("(?i)\\bvs\\.?\\s+|\\bversus\\s+");
+
+        Matcher atMatcher = atPat.matcher(text);
+        Matcher vsMatcher = vsPat.matcher(text);
+        int atIdx = atMatcher.find() ? atMatcher.end()  : -1;
+        int vsIdx = vsMatcher.find() ? vsMatcher.end()  : -1;
+        int atStart = atIdx  >= 0 ? atMatcher.start()  : -1;
+        int vsStart = vsIdx  >= 0 ? vsMatcher.start()  : -1;
+
+        if (atStart >= 0 && (vsStart < 0 || atStart < vsStart)) {
+            homeAway = "away";
+            splitIdx = atIdx;
+        } else if (vsStart >= 0) {
+            homeAway = "home";
+            splitIdx = vsIdx;
+        }
+        result.put("homeAway", homeAway);
+
+        if (splitIdx < 0) {
+            // Cannot identify opponent without @ or vs.
+            return result;
+        }
+
+        // 4. Everything after the @ / vs. is: Opponent [[Level]] [(Location)]
+        String opponentPart = text.substring(splitIdx).trim();
+
+        // 5. Strip trailing location — last (...) with ≥3 chars (excludes seed tags like "(1)")
+        Pattern locPat = Pattern.compile("\\(([^)]{3,})\\)\\s*$");
+        Matcher locMatcher = locPat.matcher(opponentPart);
+        if (locMatcher.find()) {
+            result.put("location", locMatcher.group(1).trim());
+            opponentPart = opponentPart.substring(0, locMatcher.start()).trim();
+        }
+
+        // 6. Extract level tag [JV], [JV2], [FR], [FR2], [Freshman], etc.
+        Pattern levelTagPat = Pattern.compile("\\[([^\\]]+)\\]");
+        Matcher lvlMatcher = levelTagPat.matcher(opponentPart);
+        String rawTag = null;
+        while (lvlMatcher.find()) rawTag = lvlMatcher.group(1).trim(); // take last tag
+        if (rawTag != null) {
+            String canonical = mapLevelTag(rawTag);
+            if (canonical != null) result.put("levelOverride", canonical);
+            opponentPart = opponentPart.replaceAll("\\[[^\\]]+\\]", "")
+                                       .replaceAll("\\s{2,}", " ").trim();
+        }
+
+        // 7. Remaining text is the opponent name
+        String opponent = opponentPart.replaceAll("\\s{2,}", " ").trim();
+        if (!opponent.isBlank()) result.put("opponent", opponent);
+
+        return result;
+    }
+
+    /** Maps an OSAA level bracket tag to a canonical level string, or null if unrecognised. */
+    private String mapLevelTag(String tag) {
+        String t = tag.toLowerCase().replaceAll("\\s+", "");
+        return switch (t) {
+            case "v", "varsity"             -> "Varsity";
+            case "jv", "jv1"               -> "JV";
+            case "jv2", "jv3"              -> "JV";
+            case "fr", "fr1", "freshman"   -> "Freshman";
+            case "fr2"                     -> "Freshman";
+            case "so", "soph", "sophomore" -> "Sophomore";
+            default                        -> null;
+        };
     }
 
     // ── Score page parser (incremental) ───────────────────────────────────────

@@ -35,6 +35,7 @@
             <TableColumn fx:id="colScore" text="SCORE" prefWidth="100"/>
             <TableColumn fx:id="colScoreSport" text="SPORT" prefWidth="120"/>
             <TableColumn fx:id="colScoreLevel" text="LEVEL" prefWidth="120"/>
+            <TableColumn fx:id="colScoreLocation" text="LOCATION" prefWidth="180"/>
             <TableColumn fx:id="colScoreSource" text="SOURCE" prefWidth="120"/>
         </columns>
     </TableView>

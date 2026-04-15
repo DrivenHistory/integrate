@@ -30,6 +30,7 @@ public class DashboardController {
     @FXML private TableColumn<Game, String> colSport;
     @FXML private TableColumn<Game, String> colLevel;
     @FXML private TableColumn<Game, String> colStatus;
+    @FXML private TableColumn<Game, String> colLocation;
     @FXML private TableColumn<Game, String> colSource;
 
     @FXML private ComboBox<String> sportFilter;
@@ -64,6 +65,8 @@ public class DashboardController {
                 setGraphic(chip); setText(null);
             }
         });
+        colLocation.setCellValueFactory(d -> new SimpleStringProperty(
+            d.getValue().getLocation() != null ? d.getValue().getLocation() : ""));
         colSource.setCellValueFactory(d -> new SimpleStringProperty(
             d.getValue().getSources() != null ? d.getValue().getSources() : ""));
 

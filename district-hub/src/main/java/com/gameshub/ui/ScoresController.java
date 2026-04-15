@@ -29,6 +29,7 @@ public class ScoresController {
     @FXML private TableColumn<Game, String> colScore;
     @FXML private TableColumn<Game, String> colScoreSport;
     @FXML private TableColumn<Game, String> colScoreLevel;
+    @FXML private TableColumn<Game, String> colScoreLocation;
     @FXML private TableColumn<Game, String> colScoreSource;
 
     @FXML private ComboBox<String> sportFilter;
@@ -67,6 +68,8 @@ public class ScoresController {
         });
         colScoreSport.setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getSport()));
         colScoreLevel.setCellValueFactory(d -> new SimpleStringProperty(d.getValue().getLevel()));
+        colScoreLocation.setCellValueFactory(d -> new SimpleStringProperty(
+            d.getValue().getLocation() != null ? d.getValue().getLocation() : ""));
         colScoreSource.setCellValueFactory(d -> new SimpleStringProperty(
             d.getValue().getSources() != null ? d.getValue().getSources() : ""));
 
@@ -253,15 +256,16 @@ public class ScoresController {
         File file = chooser.showSaveDialog(scoresTable.getScene().getWindow());
         if (file != null) {
             try (PrintWriter pw = new PrintWriter(file)) {
-                pw.println("Date,Home Team,Away Team,Score,Sport,Level,Source");
+                pw.println("Date,Home Team,Away Team,Score,Sport,Level,Location,Source");
                 for (Game g : filteredGames) {
                     String score = (g.getHomeScore() != null && g.getAwayScore() != null)
                         ? g.getHomeScore() + "-" + g.getAwayScore() : "";
-                    pw.printf("%s,%s,%s,%s,%s,%s,%s%n",
+                    pw.printf("%s,%s,%s,%s,%s,%s,%s,%s%n",
                         safe(g.getGameDate()),
                         safe(display(g.getHomeTeam(), g)), safe(display(g.getAwayTeam(), g)),
                         safe(score),
                         safe(g.getSport()), safe(g.getLevel()),
+                        safe(g.getLocation()),
                         safe(g.getSources()));
                 }
             } catch (IOException ex) {
