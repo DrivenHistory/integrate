@@ -419,12 +419,18 @@ public class OSAAConnector implements PlatformConnector {
     /** Maps a tab label like "Junior Varsity" to a canonical level string. */
     private String mapTabLabel(String label) {
         String t = label.toLowerCase();
+        // Check numbered variants before the base form so "Junior Varsity 2" doesn't match "Junior Varsity"
+        if (t.contains("junior varsity 2"))  return "JV2";
+        if (t.contains("junior varsity 3"))  return "JV3";
         if (t.contains("junior varsity") || t.contains("j.v.")) return "JV";
-        if (t.matches(".*\\bjv\\b.*"))   return "JV";
-        if (t.contains("freshman"))      return "Freshman";
-        if (t.contains("sophom"))        return "Sophomore";
+        if (t.matches(".*\\bjv2\\b.*"))      return "JV2";
+        if (t.matches(".*\\bjv3\\b.*"))      return "JV3";
+        if (t.matches(".*\\bjv\\b.*"))       return "JV";
+        if (t.contains("freshman 2"))        return "Freshman 2";
+        if (t.contains("freshman"))          return "Freshman";
+        if (t.contains("sophom"))            return "Sophomore";
         if (t.contains("8th grade") || t.contains("middle school")) return "Middle School";
-        if (t.contains("varsity"))       return "Varsity";
+        if (t.contains("varsity"))           return "Varsity";
         return label; // preserve original text when unknown
     }
 
@@ -976,8 +982,8 @@ public class OSAAConnector implements PlatformConnector {
      */
     private String extractSportFromLabel(String label) {
         String stripped = label
-            .replaceAll("(?i)\\bjunior varsity\\b", "")
-            .replaceAll("(?i)\\bj\\.?v\\.?\\b", "")
+            .replaceAll("(?i)\\bjunior varsity\\s*\\d*\\b", "")
+            .replaceAll("(?i)\\bj\\.?v\\.?\\s*\\d*\\b", "")
             .replaceAll("(?i)\\bvarsity\\b", "")
             .replaceAll("(?i)\\bfreshman\\b", "")
             .replaceAll("(?i)\\bsophomore\\b", "")
@@ -995,12 +1001,16 @@ public class OSAAConnector implements PlatformConnector {
      */
     private String extractLevelFromLabel(String label) {
         String t = label.toLowerCase();
+        if (t.contains("junior varsity 2"))  return "JV2";
+        if (t.contains("junior varsity 3"))  return "JV3";
         if (t.contains("junior varsity") || t.contains("j.v.")) return "JV";
-        if (t.matches(".*\\bjv\\b.*"))   return "JV";
-        if (t.contains("freshman"))      return "Freshman";
-        if (t.contains("sophom"))        return "Sophomore";
+        if (t.matches(".*\\bjv2\\b.*"))      return "JV2";
+        if (t.matches(".*\\bjv3\\b.*"))      return "JV3";
+        if (t.matches(".*\\bjv\\b.*"))       return "JV";
+        if (t.contains("freshman"))          return "Freshman";
+        if (t.contains("sophom"))            return "Sophomore";
         if (t.contains("8th grade") || t.contains("middle school")) return "Middle School";
-        if (t.contains("varsity"))       return "Varsity";
+        if (t.contains("varsity"))           return "Varsity";
         return "Varsity"; // safest default when no keyword found
     }
 

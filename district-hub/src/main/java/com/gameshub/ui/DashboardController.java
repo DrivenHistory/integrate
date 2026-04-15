@@ -88,7 +88,7 @@ public class DashboardController {
             "Volleyball", "Baseball", "Softball", "Cross Country", "Swimming", "Wrestling",
             "Track & Field", "Tennis", "Golf", "Lacrosse", "Field Hockey", "Ice Hockey");
         levelFilter.getItems().addAll("All Levels", "Varsity", "JV", "Junior Varsity",
-            "Freshman", "Sophomore", "Middle School");
+            "JV2", "Freshman", "Sophomore", "Middle School");
         buildPlatformFilter();
         sportFilter.setValue("All Sports");
         levelFilter.setValue("All Levels");
